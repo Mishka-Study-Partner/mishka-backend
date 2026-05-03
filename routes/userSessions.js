@@ -1,0 +1,13 @@
+const express = require("express");
+const c = require("../controllers/userSessionController");
+
+const router = express.Router();
+
+router.get("/", c.list);
+router.get("/by-user/:userId", c.listByUser);
+router.get("/:id", c.getById);
+router.post("/", c.create);
+router.put("/:id", c.update);
+router.delete("/:id", c.remove);
+
+module.exports = router;

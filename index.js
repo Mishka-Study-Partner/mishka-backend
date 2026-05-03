@@ -1,0 +1,93 @@
+const express = require("express");
+const cors = require("cors");
+require("dotenv").config();
+
+const { HttpError } = require("./utils/httpError");
+const errorHandler = require("./middleware/errorHandler");
+const { apiEnvelope } = require("./middleware/apiEnvelope");
+const { requireAuth } = require("./middleware/auth");
+const upload = require("./middleware/upload");
+const { validate } = require("./middleware/validateRequest");
+const legacyAi = require("./controllers/legacyAiController");
+const { aiChatSchema, aiGenerateToolsSchema } = require("./validation/schemas");
+
+const app = express();
+
+const rawOrigins = process.env.CORS_ORIGIN || "*";
+const allowAnyOrigin = rawOrigins.trim() === "*";
+const allowedOrigins = rawOrigins
+  .split(",")
+  .map((x) => x.trim())
+  .filter(Boolean);
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (allowAnyOrigin || !origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new HttpError(403, "Origin not allowed by CORS", undefined, "CORS_FORBIDDEN"));
+    },
+    credentials: true,
+    exposedHeaders: ["Content-Type"],
+  })
+);
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use(apiEnvelope);
+
+app.get("/", (_req, res) => {
+  res.apiSuccess(
+    {
+      name: "Mishka API",
+      status: "ok",
+      docs: "See README.md for routes and setup.",
+    },
+    "OK",
+    200
+  );
+});
+
+app.use("/auth", require("./routes/auth"));
+
+app.post("/upload", requireAuth, upload.single("file"), legacyAi.upload);
+app.post("/chat", requireAuth, validate(aiChatSchema), legacyAi.chat);
+app.post("/generate-tools", requireAuth, validate(aiGenerateToolsSchema), legacyAi.generateTools);
+
+app.use(requireAuth);
+app.use("/users", require("./routes/users"));
+app.use("/password-reset-tokens", require("./routes/passwordResetTokens"));
+app.use("/user-preferences", require("./routes/userPreferences"));
+app.use("/user-sessions", require("./routes/userSessions"));
+app.use("/tips", require("./routes/tips"));
+app.use("/user-streaks", require("./routes/userStreaks"));
+app.use("/ai-tools", require("./routes/aiTools"));
+app.use("/study-sessions", require("./routes/studySessions"));
+app.use("/communities", require("./routes/communities"));
+app.use("/user-communities", require("./routes/userCommunities"));
+app.use("/categories", require("./routes/categories"));
+app.use("/user-saved-categories", require("./routes/userSavedCategories"));
+app.use("/user-ai-activity", require("./routes/userAiActivity"));
+app.use("/chat-sessions", require("./routes/chatSessions"));
+app.use("/chat-messages", require("./routes/chatMessages"));
+app.use("/ai-requests", require("./routes/aiRequests"));
+app.use("/flashcard-sets", require("./routes/flashcardSets"));
+app.use("/flashcards", require("./routes/flashcards"));
+app.use("/quizzes", require("./routes/quizzes"));
+app.use("/quiz-questions", require("./routes/quizQuestions"));
+app.use("/summaries", require("./routes/summaries"));
+app.use("/history-items", require("./routes/historyItems"));
+app.use("/todo-lists", require("./routes/todoLists"));
+app.use("/icons", require("./routes/icons"));
+app.use("/tasks", require("./routes/tasks"));
+
+app.use((_req, _res, next) => {
+  next(new HttpError(404, "Route not found", undefined, "NOT_FOUND"));
+});
+
+app.use(errorHandler);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Mishka backend listening on http://localhost:${PORT}`);
+});

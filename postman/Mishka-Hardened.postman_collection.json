@@ -1,0 +1,102 @@
+{
+  "info": {
+    "name": "Mishka Backend - Hardened",
+    "description": "All JSON responses use envelope: success, message, message_en, message_ar, data, error, details. JWT: Authorization: Bearer {{token}}. Use Accept-Language: ar for Arabic primary message.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/"
+      }
+    },
+    {
+      "name": "Auth Register",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"firstName\": \"Sara\",\n  \"lastName\": \"Mishka\",\n  \"email\": \"sara@example.com\",\n  \"password\": \"password123\",\n  \"agreeTerms\": true\n}"
+        },
+        "url": "{{baseUrl}}/auth/register"
+      }
+    },
+    {
+      "name": "Auth Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"},
+          {"key": "Accept-Language", "value": "en"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"sara@example.com\",\n  \"password\": \"password123\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/login"
+      }
+    },
+    {
+      "name": "Auth Me",
+      "request": {
+        "method": "GET",
+        "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+        "url": "{{baseUrl}}/auth/me"
+      }
+    },
+    {
+      "name": "Users (Protected)",
+      "request": {
+        "method": "GET",
+        "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+        "url": "{{baseUrl}}/users"
+      }
+    },
+    {
+      "name": "Forgot Password",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"sara@example.com\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/forgot-password"
+      }
+    },
+    {
+      "name": "Reset Password",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": \"<from-forgot-password>\",\n  \"resetCode\": \"<from-forgot-password>\",\n  \"newPassword\": \"newPassword123\"\n}"
+        },
+        "url": "{{baseUrl}}/auth/reset-password"
+      }
+    },
+    {
+      "name": "Chat (Protected)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Authorization", "value": "Bearer {{token}}"},
+          {"key": "Content-Type", "value": "application/json"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"session_id\": \"demo-session\",\n  \"message\": \"Hello\"\n}"
+        },
+        "url": "{{baseUrl}}/chat"
+      }
+    }
+  ],
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:3000"},
+    {"key": "token", "value": ""}
+  ]
+}

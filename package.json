@@ -1,0 +1,28 @@
+{
+  "name": "mishka-backend",
+  "version": "1.0.0",
+  "description": "REST API for Mishka Flutter app (PostgreSQL + Prisma + Express)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js",
+    "test:smoke": "node tests/smoke.js",
+    "postinstall": "prisma generate"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^6.19.2",
+    "axios": "^1.14.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "form-data": "^4.0.4",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "prisma": "^6.19.2",
+    "zod": "^4.1.11"
+  }
+}
