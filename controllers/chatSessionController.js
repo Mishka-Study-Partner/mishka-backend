@@ -1,13 +1,16 @@
 const prisma = require("../utils/prisma");
 const asyncHandler = require("../utils/asyncHandler");
 const { createCrudHandlers } = require("../utils/prismaCrud");
+const { assertOwnedOrAdmin, ownedWhere } = require("../utils/authz");
 
 const crud = createCrudHandlers("chatSession", {
   include: { messages: { orderBy: { createdAt: "asc" } } },
+  ownership: { userIdField: "userId" },
 });
 
 exports.list = asyncHandler(async (req, res) => {
   const rows = await prisma.chatSession.findMany({
+    where: ownedWhere(req),
     orderBy: { createdAt: "desc" },
     include: { messages: { orderBy: { createdAt: "asc" } } },
   });
@@ -20,6 +23,8 @@ exports.update = asyncHandler(crud.update);
 exports.remove = asyncHandler(crud.remove);
 
 exports.listMessages = asyncHandler(async (req, res) => {
+  const session = await prisma.chatSession.findUnique({ where: { id: req.params.id } });
+  assertOwnedOrAdmin(req, session, "userId");
   const rows = await prisma.chatMessage.findMany({
     where: { sessionId: req.params.id },
     orderBy: { createdAt: "asc" },
@@ -28,6 +33,8 @@ exports.listMessages = asyncHandler(async (req, res) => {
 });
 
 exports.createMessage = asyncHandler(async (req, res) => {
+  const session = await prisma.chatSession.findUnique({ where: { id: req.params.id } });
+  assertOwnedOrAdmin(req, session, "userId");
   const row = await prisma.chatMessage.create({
     data: {
       ...req.body,

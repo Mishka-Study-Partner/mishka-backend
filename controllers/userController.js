@@ -3,6 +3,7 @@ const prisma = require("../utils/prisma");
 const asyncHandler = require("../utils/asyncHandler");
 const { notFound, badRequest } = require("../utils/httpError");
 const { requireFields } = require("../utils/validate");
+const { isAdmin } = require("../utils/authz");
 
 const SALT_ROUNDS = 10;
 
@@ -84,6 +85,11 @@ exports.update = asyncHandler(async (req, res) => {
     } else {
       data.password = await bcrypt.hash(body.password, SALT_ROUNDS);
     }
+  }
+
+  if (!isAdmin(req.auth)) {
+    delete data.role;
+    delete data.isVerified;
   }
 
   const user = await prisma.user.update({

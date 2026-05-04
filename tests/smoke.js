@@ -50,11 +50,20 @@ async function main() {
   const meJson = await readEnvelope(meRes);
   assert(meRes.status === 200 && meJson.success, `auth/me failed: ${meRes.status}`);
 
-  const protectedRes = await fetch(`${baseUrl}/users`, {
+  const adminListRes = await fetch(`${baseUrl}/users`, {
     headers: { Authorization: `Bearer ${loginJson.data.accessToken}` },
   });
-  const protectedJson = await readEnvelope(protectedRes);
-  assert(protectedRes.status === 200 && protectedJson.success, `GET /users failed: ${protectedRes.status}`);
+  const adminListJson = await readEnvelope(adminListRes);
+  assert(
+    adminListRes.status === 403 && adminListJson.success === false && adminListJson.error === "FORBIDDEN",
+    `GET /users should be forbidden for non-admin: got ${adminListRes.status}`
+  );
+
+  const selfUserRes = await fetch(`${baseUrl}/users/${userId}`, {
+    headers: { Authorization: `Bearer ${loginJson.data.accessToken}` },
+  });
+  const selfUserJson = await readEnvelope(selfUserRes);
+  assert(selfUserRes.status === 200 && selfUserJson.success, `GET /users/:id (self) failed: ${selfUserRes.status}`);
 
   const forgotRes = await fetch(`${baseUrl}/auth/forgot-password`, {
     method: "POST",

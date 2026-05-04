@@ -46,6 +46,10 @@ const ERROR_MESSAGES = {
     en: "Origin not allowed by CORS",
     ar: "المصدر غير مسموح به",
   },
+  FORBIDDEN: {
+    en: "You do not have permission to perform this action",
+    ar: "ليس لديك صلاحية لتنفيذ هذا الإجراء",
+  },
   SERVICE_UNAVAILABLE: {
     en: "Service unavailable",
     ar: "الخدمة غير متاحة",

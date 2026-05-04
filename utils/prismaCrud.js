@@ -1,10 +1,7 @@
 const prisma = require("./prisma");
 const { notFound, badRequest } = require("./httpError");
+const { assertOwnedOrAdmin, isAdmin, ownedWhere } = require("./authz");
 
-/**
- * @param {string} delegate - prisma model delegate key (e.g. 'tip', 'user')
- * @param {{ idField?: string, idType?: 'string'|'int' }} options
- */
 function parseId(raw, idType) {
   if (idType === "int") {
     const n = parseInt(raw, 10);
@@ -14,14 +11,31 @@ function parseId(raw, idType) {
   return raw;
 }
 
+/**
+ * @param {string} delegate Prisma client delegate key (e.g. `task`, `todoList`)
+ * @param {{
+ *   idField?: string,
+ *   idType?: 'string'|'int',
+ *   include?: object,
+ *   orderBy?: object,
+ *   mapCreate?: (body: object) => object,
+ *   mapUpdate?: (body: object) => object,
+ *   ownership?: { userIdField?: string },
+ * }} [options]
+ */
 function createCrudHandlers(delegate, options = {}) {
   const idField = options.idField || "id";
   const idType = options.idType || "string";
+  const ownership = options.ownership;
+  const userIdField = ownership?.userIdField || "userId";
 
   return {
     async list(req, res) {
       const q = { include: options.include };
       if (options.orderBy) q.orderBy = options.orderBy;
+      if (ownership) {
+        q.where = ownedWhere(req, userIdField);
+      }
       const rows = await prisma[delegate].findMany(q);
       res.apiSuccess(rows, "OK", 200);
     },
@@ -32,12 +46,16 @@ function createCrudHandlers(delegate, options = {}) {
         where: { [idField]: id },
         include: options.include,
       });
-      if (!row) throw notFound();
+      if (ownership) assertOwnedOrAdmin(req, row, userIdField);
+      else if (!row) throw notFound();
       res.apiSuccess(row, "OK", 200);
     },
 
     async create(req, res) {
-      const data = options.mapCreate ? options.mapCreate(req.body) : req.body;
+      let data = options.mapCreate ? options.mapCreate(req.body) : { ...req.body };
+      if (ownership && !isAdmin(req.auth)) {
+        data = { ...data, [userIdField]: req.auth.sub };
+      }
       const row = await prisma[delegate].create({
         data,
         include: options.include,
@@ -47,6 +65,13 @@ function createCrudHandlers(delegate, options = {}) {
 
     async update(req, res) {
       const id = parseId(req.params.id, idType);
+      const existing = await prisma[delegate].findUnique({
+        where: { [idField]: id },
+        include: options.include,
+      });
+      if (ownership) assertOwnedOrAdmin(req, existing, userIdField);
+      else if (!existing) throw notFound();
+
       const data = options.mapUpdate ? options.mapUpdate(req.body) : { ...req.body };
       if (!data || typeof data !== "object" || Object.keys(data).length === 0) {
         throw badRequest("No fields to update", undefined, "VALIDATION_ERROR");
@@ -61,6 +86,12 @@ function createCrudHandlers(delegate, options = {}) {
 
     async remove(req, res) {
       const id = parseId(req.params.id, idType);
+      const existing = await prisma[delegate].findUnique({
+        where: { [idField]: id },
+      });
+      if (ownership) assertOwnedOrAdmin(req, existing, userIdField);
+      else if (!existing) throw notFound();
+
       await prisma[delegate].delete({ where: { [idField]: id } });
       res.apiSuccess(null, "DELETED", 200);
     },

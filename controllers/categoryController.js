@@ -1,6 +1,7 @@
 const prisma = require("../utils/prisma");
 const asyncHandler = require("../utils/asyncHandler");
 const { createCrudHandlers } = require("../utils/prismaCrud");
+const { isAdmin } = require("../utils/authz");
 
 const crud = createCrudHandlers("category");
 
@@ -12,7 +13,10 @@ exports.remove = asyncHandler(crud.remove);
 
 exports.listSavedByUsers = asyncHandler(async (req, res) => {
   const rows = await prisma.userSavedCategory.findMany({
-    where: { categoryId: req.params.id },
+    where: {
+      categoryId: req.params.id,
+      ...(isAdmin(req.auth) ? {} : { userId: req.auth.sub }),
+    },
     include: { user: { select: { id: true, email: true, username: true } } },
   });
   res.apiSuccess(rows, "OK", 200);

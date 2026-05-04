@@ -1,10 +1,11 @@
 const express = require("express");
 const c = require("../controllers/userSessionController");
+const { requireAdmin, requireSelfOrAdmin } = require("../middleware/authorize");
 
 const router = express.Router();
 
-router.get("/", c.list);
-router.get("/by-user/:userId", c.listByUser);
+router.get("/", requireAdmin, c.list);
+router.get("/by-user/:userId", requireSelfOrAdmin("userId"), c.listByUser);
 router.get("/:id", c.getById);
 router.post("/", c.create);
 router.put("/:id", c.update);

@@ -1,7 +1,10 @@
 const express = require("express");
 const c = require("../controllers/passwordResetTokenController");
+const { requireAdmin } = require("../middleware/authorize");
 
 const router = express.Router();
+
+router.use(requireAdmin);
 
 router.get("/", c.list);
 router.get("/by-user/:userId", c.listByUser);

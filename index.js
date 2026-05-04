@@ -41,7 +41,7 @@ app.get("/", (_req, res) => {
     {
       name: "Mishka API",
       status: "ok",
-      docs: "See README.md for routes and setup.",
+      docs: "OpenAPI UI at /api-docs and /openapi.json",
     },
     "OK",
     200
@@ -49,6 +49,11 @@ app.get("/", (_req, res) => {
 });
 
 app.use("/auth", require("./routes/auth"));
+
+if (process.env.DISABLE_SWAGGER !== "true") {
+  const { setupSwagger } = require("./swagger");
+  setupSwagger(app);
+}
 
 app.post("/upload", requireAuth, upload.single("file"), legacyAi.upload);
 app.post("/chat", requireAuth, validate(aiChatSchema), legacyAi.chat);

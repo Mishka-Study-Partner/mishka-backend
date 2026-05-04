@@ -2,7 +2,7 @@ const prisma = require("../utils/prisma");
 const asyncHandler = require("../utils/asyncHandler");
 const { createCrudHandlers } = require("../utils/prismaCrud");
 
-const crud = createCrudHandlers("aiRequest");
+const crud = createCrudHandlers("aiRequest", { ownership: { userIdField: "userId" } });
 
 exports.list = asyncHandler(crud.list);
 exports.getById = asyncHandler(crud.getById);

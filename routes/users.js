@@ -2,36 +2,39 @@
 const c = require("../controllers/userController");
 const { validate } = require("../middleware/validateRequest");
 const { updateUserSchema } = require("../validation/schemas");
+const { requireAdmin, requireSelfOrAdmin } = require("../middleware/authorize");
 
 const router = express.Router();
 
-router.get("/", c.list);
-router.post("/", c.create);
+const selfOrAdmin = requireSelfOrAdmin("id");
 
-router.get("/:id/todo-lists", c.listTodoLists);
-router.get("/:id/tasks", c.listTasks);
-router.get("/:id/chat-sessions", c.listChatSessions);
-router.get("/:id/flashcard-sets", c.listFlashcardSets);
-router.get("/:id/quizzes", c.listQuizzes);
-router.get("/:id/summaries", c.listSummaries);
-router.get("/:id/history-items", c.listHistoryItems);
-router.get("/:id/streaks", c.listUserStreaks);
-router.get("/:id/study-sessions", c.listStudySessions);
-router.get("/:id/communities", c.listUserCommunities);
-router.get("/:id/saved-categories", c.listSavedCategories);
-router.get("/:id/ai-requests", c.listAiRequests);
-router.get("/:id/ai-activity", c.listUserAiActivity);
-router.get("/:id/preferences", c.getPreference);
-router.put("/:id/preferences", c.upsertPreference);
+router.get("/", requireAdmin, c.list);
+router.post("/", requireAdmin, c.create);
 
-router.post("/:id/communities", c.attachCommunity);
-router.delete("/:id/communities/:communityId", c.detachCommunity);
+router.get("/:id/todo-lists", selfOrAdmin, c.listTodoLists);
+router.get("/:id/tasks", selfOrAdmin, c.listTasks);
+router.get("/:id/chat-sessions", selfOrAdmin, c.listChatSessions);
+router.get("/:id/flashcard-sets", selfOrAdmin, c.listFlashcardSets);
+router.get("/:id/quizzes", selfOrAdmin, c.listQuizzes);
+router.get("/:id/summaries", selfOrAdmin, c.listSummaries);
+router.get("/:id/history-items", selfOrAdmin, c.listHistoryItems);
+router.get("/:id/streaks", selfOrAdmin, c.listUserStreaks);
+router.get("/:id/study-sessions", selfOrAdmin, c.listStudySessions);
+router.get("/:id/communities", selfOrAdmin, c.listUserCommunities);
+router.get("/:id/saved-categories", selfOrAdmin, c.listSavedCategories);
+router.get("/:id/ai-requests", selfOrAdmin, c.listAiRequests);
+router.get("/:id/ai-activity", selfOrAdmin, c.listUserAiActivity);
+router.get("/:id/preferences", selfOrAdmin, c.getPreference);
+router.put("/:id/preferences", selfOrAdmin, c.upsertPreference);
 
-router.post("/:id/saved-categories", c.saveCategory);
-router.delete("/:id/saved-categories/:categoryId", c.unsaveCategory);
+router.post("/:id/communities", selfOrAdmin, c.attachCommunity);
+router.delete("/:id/communities/:communityId", selfOrAdmin, c.detachCommunity);
 
-router.get("/:id", c.getById);
-router.put("/:id", validate(updateUserSchema), c.update);
-router.delete("/:id", c.remove);
+router.post("/:id/saved-categories", selfOrAdmin, c.saveCategory);
+router.delete("/:id/saved-categories/:categoryId", selfOrAdmin, c.unsaveCategory);
+
+router.get("/:id", selfOrAdmin, c.getById);
+router.put("/:id", selfOrAdmin, validate(updateUserSchema), c.update);
+router.delete("/:id", selfOrAdmin, c.remove);
 
 module.exports = router;
