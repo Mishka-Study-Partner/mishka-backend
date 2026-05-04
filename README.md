@@ -13,7 +13,34 @@ Node.js + Express REST API for the Mishka Flutter app, backed by PostgreSQL and 
 
 - **API** — Express (default port `3000`), JSON envelope on every response.
 - **Data** — PostgreSQL via Prisma.
-- **AI** — Optional separate HTTP service (`AI_SERVICE_URL`); Express proxies `/upload`, `/chat`, `/generate-tools`.
+- **AI** — Optional separate HTTP service (`AI_SERVICE_URL`); Express proxies `/upload`, `/chat`, `/generate-tools` without changing the FastAPI wire format. Node persists outcomes in Postgres and keeps an on-disk copy of each uploaded file (see below).
+
+## AI tutor (FastAPI) + persistence
+
+The upstream app (see `AI_SERVICE_URL`) is the **Mishka AI Study Partner** FastAPI service from the AI team doc. The Python service is unchanged: multipart and query params stay the same. **Node** adds durable storage after each successful upstream call (HTTP 2xx).
+
+### Upload file copy on disk
+
+- Env **`AI_UPLOAD_STORAGE_DIR`** (default `data/ai-uploads`, relative to the process working directory, or an absolute path): each successful **`POST /upload`** writes the raw bytes under `{userId}/{session_id}/` with a sanitized filename.
+- The matching **`chat_sessions`** row stores **`upload_stored_path`** (path relative to that root), **`upload_original_filename`**, **`upload_mime_type`**, **`upload_size_bytes`**.
+- Add this directory to backups alongside the database. It is listed in `.gitignore` as `data/ai-uploads/`.
+
+| Upstream route | Express proxy | Upstream wire format |
+|----------------|---------------|----------------------|
+| `POST /upload` | `POST /upload` | multipart `file`, form `summary_level` (`simple` / `detailed`, default `detailed`) |
+| `POST /chat` | `POST /chat` | FastAPI **query** params `session_id`, `message` (Express still accepts JSON body from clients and forwards as query) |
+| `POST /generate-tools` | `POST /generate-tools` | FastAPI **query** params `session_id`, `tool_type`, `complexity` (default `Intermediate` if omitted) |
+
+**Upstream JSON (success only, persisted after HTTP 2xx):**
+
+- **`/upload`** → `{ "session_id", "explanation" }` — creates `chat_sessions` with that `id`, first user line `Explain this file. Level: …`, model `explanation`, **`ai_requests`** (`featureType: upload`) with **`request_payload`** (summary level, original filename, stored path, size, MIME) and **`response_payload`** (full upstream JSON). File bytes are written under **`AI_UPLOAD_STORAGE_DIR`** as above.
+- **`/chat`** → `{ "response": "<text>" }` — requires existing tutor session for user; appends user + `ai` **`chat_messages`** and **`ai_requests`** with **`request_payload`** (`session_id`, `message`) and **`response_payload`** (full upstream JSON).
+- **`/generate-tools`** → `{ "status": "success", "tool_type", "content" }` with `tool_type` in `quizzes` \| `flashcards` \| `mind_maps` only:
+  - **quizzes** — `content` is an array of **10** items: `{ question, options[4], correct_answer }` where `correct_answer` equals one option string; stored as `quizzes` / `quiz_questions` + `history_items`.
+  - **flashcards** — `content` is an array of **10** items: `{ type: term\|fact\|note, front, back }`; stored as `flashcard_sets` / `flashcards` (`question` = `` `[type] front` ``, `answer` = `back`) + `history_items`.
+  - **mind_maps** — `content` is `{ title, children: [...] }`; full tree stays in `ai_requests.response_payload`; `history_items` row references that `ai_requests` id.
+
+Strict parsing lives in **`services/aiTutorContract.js`** and **`services/aiMaterializers.js`**; orchestration in **`services/aiPersistence.js`**. Persistence failures are **logged** only; the client still receives the upstream body inside the usual envelope.
 
 ## Roles and authorization
 
@@ -55,8 +82,9 @@ All routes except `/`, `/auth/register`, `/auth/login`, `/auth/forgot-password`,
 
 ## AI (Flutter `MishkaAiService`)
 
-- `POST /upload` — multipart `file`, optional `summary_level` (requires auth). Proxies to `AI_SERVICE_URL/upload`; response is still wrapped in the envelope (`data` holds upstream JSON).
-- `POST /chat`, `POST /generate-tools` — same (envelope + `data`).
+- `POST /upload` — multipart `file`, optional `summary_level` (`simple` \| `detailed`, default `detailed`). Proxies unchanged to `AI_SERVICE_URL/upload`. On upstream success, Node saves the file under **`AI_UPLOAD_STORAGE_DIR`**, creates the tutor **`chat_sessions`** row (with upload metadata columns), seeds messages, and records **`ai_requests`**. Envelope `data` is still the upstream JSON (`session_id`, `explanation`).
+- `POST /chat` — JSON body `session_id`, `message`. Proxies as FastAPI query params. On success, appends **`chat_messages`** and **`ai_requests`** (full upstream JSON in **`response_payload`**).
+- `POST /generate-tools` — JSON `session_id`, `tool_type`, optional `complexity`. Same proxy pattern; on success persists **`ai_requests`**, materializes quizzes / flashcards / mind maps where applicable.
 
 ## Setup
 
@@ -68,7 +96,7 @@ npm install
 npx prisma generate
 ```
 
-2. Copy `.env.example` → `.env` and set `DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGIN`, `AI_SERVICE_URL`.
+2. Copy `.env.example` → `.env` and set `DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGIN`, `AI_SERVICE_URL`. If you use the AI tutor upload route, set **`AI_UPLOAD_STORAGE_DIR`** to a writable path (default `data/ai-uploads` is fine for local dev).
 
 3. Migrations (first time):
 
@@ -99,3 +127,4 @@ Import `postman/Mishka-Hardened.postman_collection.json`. After login, set colle
 - Set a strong `JWT_SECRET`, restrict `CORS_ORIGIN` (avoid `*` in production).
 - Run `npx prisma migrate deploy` in CI/CD.
 - Keep `RETURN_RESET_CODE_IN_RESPONSE` unset/false in production; deliver reset codes via email/SMS only.
+- For AI uploads: point **`AI_UPLOAD_STORAGE_DIR`** at persistent storage (volume mount), ensure the process can read/write it, and include it in backups with **`DATABASE_URL`** data.

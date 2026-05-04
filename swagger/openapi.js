@@ -4,7 +4,11 @@ const paths = require("./paths");
 const tags = [
   { name: "Public", description: "No authentication." },
   { name: "Auth", description: "Registration, login, password flow. `/auth/me` requires JWT." },
-  { name: "AI proxy", description: "Proxied to `AI_SERVICE_URL`; requires JWT." },
+  {
+    name: "AI proxy",
+    description:
+      "Proxied to `AI_SERVICE_URL` with the same wire format as FastAPI (multipart `/upload`; query params for `/chat` and `/generate-tools`). Requires JWT. On upstream HTTP 2xx, Express persists tutor data in PostgreSQL (`chat_sessions`, `chat_messages`, `ai_requests`, materialized quizzes/flashcards/mind maps) and stores a copy of uploaded files on disk under `AI_UPLOAD_STORAGE_DIR` (see README). Persistence errors are logged only; responses still use the normal envelope with upstream JSON in `data`.",
+  },
   { name: "Users", description: "Admin list/create; self-or-admin for `/{id}` and nested routes." },
   { name: "Password reset tokens", description: "Admin only." },
   { name: "User sessions", description: "Global list admin-only; scoped CRUD by ownership." },
@@ -57,6 +61,8 @@ function buildOpenApi() {
         "See project `README.md` for admin bootstrap and route notes.",
         "",
         "**Request bodies:** many write endpoints accept a generic JSON object aligned with Prisma models (`prisma/schema.prisma`).",
+        "",
+        "**AI tutor:** `POST /upload` saves the file bytes locally after a successful upstream response; `chat_sessions` includes optional upload metadata columns. See component schemas `AiTutorUploadData`, `AiTutorChatData`, `AiTutorGenerateToolsData` for typical `data` shapes inside the success envelope.",
       ].join("\n"),
     },
     servers: [{ url: base, description: "Override with env `SWAGGER_SERVER_URL` or `SMOKE_BASE_URL`" }],

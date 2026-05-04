@@ -12,6 +12,7 @@ const legacyAi = require("./controllers/legacyAiController");
 const { aiChatSchema, aiGenerateToolsSchema } = require("./validation/schemas");
 
 const app = express();
+app.set("trust proxy", 1);
 
 const rawOrigins = process.env.CORS_ORIGIN || "*";
 const allowAnyOrigin = rawOrigins.trim() === "*";
@@ -36,12 +37,18 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(apiEnvelope);
 
-app.get("/", (_req, res) => {
+app.get("/", (req, res) => {
+  const host = req.get("host");
+  const base = host ? `${req.protocol}://${host}` : "";
   res.apiSuccess(
     {
       name: "Mishka API",
       status: "ok",
-      docs: "OpenAPI UI at /api-docs and /openapi.json",
+      docs: "The root URL returns this JSON. Open Swagger UI at /api-docs (not here).",
+      ...(base && {
+        swaggerUi: `${base}/api-docs`,
+        openApiJson: `${base}/openapi.json`,
+      }),
     },
     "OK",
     200

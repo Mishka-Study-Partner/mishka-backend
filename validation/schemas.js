@@ -77,10 +77,22 @@ const aiChatSchema = z
 const aiGenerateToolsSchema = z
   .object({
     session_id: z.string().min(1),
-    tool_type: z.enum(["quizzes", "flashcards", "mind_maps", "summary", "chat"]),
-    complexity: z.string().min(1),
+    tool_type: z.string().min(1),
+    complexity: z.string().min(1).optional(),
   })
-  .strict();
+  .strict()
+  .transform((data) => ({
+    session_id: data.session_id,
+    tool_type: data.tool_type.toLowerCase(),
+    complexity: data.complexity,
+  }))
+  .pipe(
+    z.object({
+      session_id: z.string().min(1),
+      tool_type: z.enum(["quizzes", "flashcards", "mind_maps"]),
+      complexity: z.string().optional(),
+    })
+  );
 
 module.exports = {
   registerSchema,

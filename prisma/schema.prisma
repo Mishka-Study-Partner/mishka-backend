@@ -270,6 +270,12 @@ model ChatSession {
   isActive  Boolean   @default(true) @map("is_active")
   createdAt DateTime  @default(now()) @map("created_at")
 
+  /// Path relative to `AI_UPLOAD_STORAGE_DIR` (e.g. `{userId}/{sessionId}/file.pdf`)
+  uploadStoredPath       String? @map("upload_stored_path") @db.VarChar(1024)
+  uploadOriginalFilename String? @map("upload_original_filename") @db.VarChar(255)
+  uploadMimeType         String? @map("upload_mime_type") @db.VarChar(255)
+  uploadSizeBytes        Int?    @map("upload_size_bytes")
+
   user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages ChatMessage[]
   aiRequests AiRequest[]
@@ -294,15 +300,20 @@ model ChatMessage {
 
 /// Unified AI usage / cost tracking (chat, flashcards, quizzes, summarize)
 model AiRequest {
-  id              String   @id @default(uuid()) @map("request_id")
-  userId          String   @map("user_id")
-  chatSessionId   String?  @map("session_id")
-  featureType     String   @map("feature_type") @db.VarChar(50)
-  requestType     String?  @map("request_type") @db.VarChar(50)
-  inputType       String?  @map("input_type") @db.VarChar(50)
-  inputReference  String?  @map("input_reference")
-  tokensUsed      Int?     @map("tokens_used")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id               String   @id @default(uuid()) @map("request_id")
+  userId           String   @map("user_id")
+  chatSessionId    String?  @map("session_id")
+  featureType      String   @map("feature_type") @db.VarChar(50)
+  requestType      String?  @map("request_type") @db.VarChar(50)
+  inputType        String?  @map("input_type") @db.VarChar(50)
+  inputReference   String?  @map("input_reference")
+  tokensUsed       Int?     @map("tokens_used")
+  /// Snapshot of outbound request (JSON) for audit / replay metadata
+  requestPayload   Json?    @map("request_payload")
+  /// Snapshot of upstream AI JSON (or normalized object) for debugging and clients that read `/ai-requests`
+  responsePayload  Json?    @map("response_payload")
+  upstreamStatus   Int?     @map("upstream_status")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   chatSession ChatSession? @relation(fields: [chatSessionId], references: [id], onDelete: SetNull)

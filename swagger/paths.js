@@ -86,7 +86,12 @@ const paths = {
     post: {
       tags: ["AI proxy"],
       summary: "Proxy file upload to AI service",
-      description: "Multipart `file`; optional `summary_level`. Requires `AI_SERVICE_URL`.",
+      description: [
+        "Multipart `file` and optional form field `summary_level` (`simple` or `detailed`, default `detailed`).",
+        "Forwards unchanged to FastAPI `POST /upload`. Requires `AI_SERVICE_URL`.",
+        "On upstream **2xx**, Node writes the file under `AI_UPLOAD_STORAGE_DIR` (`{userId}/{session_id}/…`), creates `chat_sessions` (with `upload_stored_path`, original name, MIME, size), seeds the first tutor messages, and inserts `ai_requests` (`featureType: upload`) with storage metadata in `request_payload` and the upstream JSON in `response_payload`.",
+        "Envelope `data` matches upstream: see schema `AiTutorUploadData`.",
+      ].join(" "),
       parameters: lang,
       security: bearer,
       requestBody: {
@@ -97,8 +102,12 @@ const paths = {
               type: "object",
               required: ["file"],
               properties: {
-                file: { type: "string", format: "binary" },
-                summary_level: { type: "string" },
+                file: { type: "string", format: "binary", description: "PDF or other material; proxied as-is to FastAPI." },
+                summary_level: {
+                  type: "string",
+                  enum: ["simple", "detailed"],
+                  description: "Defaults to `detailed` if omitted.",
+                },
               },
             },
           },
@@ -111,6 +120,11 @@ const paths = {
     post: {
       tags: ["AI proxy"],
       summary: "Proxy chat to AI service",
+      description: [
+        "Client sends JSON (`session_id`, `message`). Express forwards to FastAPI as **query** params on `POST /chat`, matching the AI Study Partner app.",
+        "On upstream **2xx**, Node appends `chat_messages` (user + AI) and `ai_requests` (`featureType: chat`) with full upstream JSON in `response_payload`.",
+        "Envelope `data` shape: `AiTutorChatData`.",
+      ].join(" "),
       parameters: lang,
       security: bearer,
       requestBody: jsonBody("#/components/schemas/AiChatBody", ""),
@@ -121,6 +135,11 @@ const paths = {
     post: {
       tags: ["AI proxy"],
       summary: "Proxy generate-tools to AI service",
+      description: [
+        "Client sends JSON. Express forwards `session_id`, `tool_type`, `complexity` as **query** params on `POST /generate-tools` (FastAPI). `complexity` defaults to `Intermediate` if omitted.",
+        "On upstream **2xx**, Node inserts `ai_requests` with full upstream JSON in `response_payload` and materializes quizzes, flashcards, or mind maps per `tool_type`.",
+        "Envelope `data` shape on success: `AiTutorGenerateToolsData`.",
+      ].join(" "),
       parameters: lang,
       security: bearer,
       requestBody: jsonBody("#/components/schemas/AiGenerateToolsBody", ""),

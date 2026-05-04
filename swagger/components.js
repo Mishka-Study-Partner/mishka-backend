@@ -149,15 +149,48 @@ module.exports = {
     },
     AiGenerateToolsBody: {
       type: "object",
-      required: ["session_id", "tool_type", "complexity"],
+      required: ["session_id", "tool_type"],
       additionalProperties: false,
       properties: {
         session_id: { type: "string", minLength: 1 },
         tool_type: {
           type: "string",
-          enum: ["quizzes", "flashcards", "mind_maps", "summary", "chat"],
+          enum: ["quizzes", "flashcards", "mind_maps"],
         },
-        complexity: { type: "string", minLength: 1 },
+        complexity: {
+          type: "string",
+          description: "Forwarded to FastAPI (default `Intermediate` if omitted).",
+        },
+      },
+    },
+    /** Typical `data` in the success envelope for `POST /upload` after upstream 2xx. */
+    AiTutorUploadData: {
+      type: "object",
+      description: "Returned inside the API envelope as `data`; same fields as FastAPI.",
+      required: ["session_id", "explanation"],
+      properties: {
+        session_id: { type: "string", description: "Tutor session id; also `chat_sessions.id` in Postgres." },
+        explanation: { type: "string", description: "First model explanation for the uploaded material." },
+      },
+    },
+    /** Typical `data` in the success envelope for `POST /chat` after upstream 2xx. */
+    AiTutorChatData: {
+      type: "object",
+      description: "Returned inside the API envelope as `data`; same fields as FastAPI.",
+      required: ["response"],
+      properties: {
+        response: { type: "string", description: "Model reply text." },
+      },
+    },
+    /** Typical `data` in the success envelope for `POST /generate-tools` after upstream 2xx. */
+    AiTutorGenerateToolsData: {
+      type: "object",
+      description: "Returned inside the API envelope as `data`; `content` shape depends on `tool_type` (see README).",
+      required: ["status", "tool_type", "content"],
+      properties: {
+        status: { type: "string", example: "success" },
+        tool_type: { type: "string", enum: ["quizzes", "flashcards", "mind_maps"] },
+        content: { description: "Array or tree structure per tool type." },
       },
     },
     JsonRecord: {
