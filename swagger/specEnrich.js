@@ -56,7 +56,7 @@ function classifyAccess(pathTemplate, method, operation) {
 
 function appendScopeDescription(operation, scope) {
   const hint =
-    `\n\nScope: ${scope}. Use the top filter bar — search "${scope}" to narrow operations (e.g. "Admin only", "Authenticated user", or "Public").`;
+    `\n\nScope: ${scope}. Filter bar (case-insensitive): matches tag names, paths, summaries, this Scope line, and x-scope — try "${scope}", admin, auth, /users, etc.`;
   if (operation.description && typeof operation.description === "string") {
     operation.description += hint;
   } else if (operation.summary) {

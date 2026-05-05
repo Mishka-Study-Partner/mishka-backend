@@ -1,5 +1,7 @@
+const SwaggerUIBundle = require("swagger-ui-dist/swagger-ui-bundle.js");
 const swaggerUi = require("swagger-ui-express");
 const { buildOpenApi } = require("./openapi");
+const { mishkaOpsFilterPlugin } = require("./swaggerFilterPlugin");
 
 /**
  * Serves OpenAPI 3 spec + Swagger UI. Must be registered **before** any global
@@ -27,6 +29,7 @@ function setupSwagger(app) {
         tryItOutEnabled: true,
         tagsSorter: "alpha",
         operationsSorter: "alpha",
+        plugins: [SwaggerUIBundle.plugins.DownloadUrl, mishkaOpsFilterPlugin],
       },
       customCss: `
 .swagger-ui .markdown strong {
