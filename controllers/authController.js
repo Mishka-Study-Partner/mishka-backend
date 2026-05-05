@@ -1,18 +1,41 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { Prisma } = require("@prisma/client");
 const prisma = require("../utils/prisma");
 const asyncHandler = require("../utils/asyncHandler");
 const { HttpError } = require("../utils/httpError");
+const {
+  verifyGoogleIdToken,
+  verifyAppleIdentityToken,
+  verifyFacebookAccessToken,
+  upsertOAuthUser,
+} = require("../services/oauthVerify");
+const { allocateUsername, ensureUsernameAssigned } = require("../utils/generateUsername");
 
 const SALT_ROUNDS = 10;
 
-function issueToken(user) {
+function expiresInForRemember(rememberMe) {
+  return rememberMe
+    ? process.env.JWT_REMEMBER_ME_EXPIRES_IN || "30d"
+    : process.env.JWT_EXPIRES_IN || "7d";
+}
+
+function issueToken(user, rememberMe) {
   const payload = { sub: user.id, email: user.email, role: user.role };
-  const expiresIn = process.env.JWT_EXPIRES_IN || "7d";
+  const expiresIn = expiresInForRemember(Boolean(rememberMe));
   const token = jwt.sign(payload, process.env.JWT_SECRET || "dev-secret-change-me", {
     expiresIn,
   });
   return { token, expiresIn };
+}
+
+function sessionExpiryFromToken(token) {
+  const decoded = jwt.decode(token);
+  if (decoded && typeof decoded.exp === "number") {
+    return new Date(decoded.exp * 1000);
+  }
+  const fallbackDays = 7;
+  return new Date(Date.now() + fallbackDays * 24 * 60 * 60 * 1000);
 }
 
 function userResponse(user) {
@@ -30,43 +53,223 @@ function authPayload(user, token, expiresIn) {
   };
 }
 
-exports.register = asyncHandler(async (req, res) => {
-  const body = req.body;
-  const password = body.password ? await bcrypt.hash(body.password, SALT_ROUNDS) : null;
+function oauthExtrasFromBody(body) {
+  return {
+    agreeTerms: body.agreeTerms,
+    rememberMe: body.rememberMe,
+    phoneNumber: body.phoneNumber,
+    countryCode: body.countryCode,
+    firstName: body.firstName,
+    lastName: body.lastName,
+    educationStatus: body.educationStatus,
+    educationOtherDetail: body.educationOtherDetail,
+    schoolTrack: body.schoolTrack,
+    schoolGrade: body.schoolGrade,
+    universityYear: body.universityYear,
+  };
+}
 
-  const user = await prisma.user.create({
-    data: {
-      firstName: body.firstName,
-      lastName: body.lastName,
-      email: body.email,
-      phoneNumber: body.phoneNumber,
-      countryCode: body.countryCode,
-      agreeTerms: body.agreeTerms,
-      provider: body.provider,
-      providerId: body.providerId,
-      password,
-      fullName: `${body.firstName} ${body.lastName}`,
-    },
-  });
-
-  const { token, expiresIn } = issueToken(user);
+async function finalizeAuthResponse(res, incomingUser, bodyRememberMe, created) {
+  const user = await ensureUsernameAssigned(prisma, incomingUser.id);
+  if (typeof bodyRememberMe === "boolean") {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { rememberMe: bodyRememberMe },
+    });
+    user.rememberMe = bodyRememberMe;
+  }
+  const rememberMe = typeof bodyRememberMe === "boolean" ? bodyRememberMe : user.rememberMe;
+  const { token, expiresIn } = issueToken(user, rememberMe);
   await prisma.userSession.create({
     data: {
       userId: user.id,
       token,
       isActive: true,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      expiresAt: sessionExpiryFromToken(token),
+    },
+  });
+  const payload = authPayload(user, token, expiresIn);
+  if (created) {
+    return res.apiCreated(payload, "CREATED");
+  }
+  return res.apiSuccess(payload, "OK", 200);
+}
+
+function userWhereForPhone(phoneNumber, countryCode) {
+  if (countryCode != null && countryCode !== "") {
+    return { phoneNumber, countryCode };
+  }
+  return { phoneNumber, countryCode: null };
+}
+
+/** Until real SMS/email OTP ships: any `signupOtp` equal to this value skips DB verification. Disable in production with `DISABLE_SIGNUP_OTP_BYPASS=true`. */
+function signupOtpBypassesVerification(signupOtp) {
+  if (process.env.DISABLE_SIGNUP_OTP_BYPASS === "true") return false;
+  const bypass = process.env.SIGNUP_OTP_BYPASS_CODE ?? "111111";
+  return typeof signupOtp === "string" && signupOtp === bypass;
+}
+
+/**
+ * @param {import("@prisma/client").Prisma.TransactionClient} tx
+ * @param {{ email: string; phoneNumber: string; countryCode?: string | null; signupOtp: string }} body
+ */
+async function assertSignupOtpValid(tx, body) {
+  const row = await tx.signupVerification.findFirst({
+    where: {
+      code: body.signupOtp,
+      consumedAt: null,
+      expiresAt: { gt: new Date() },
+      OR: [{ email: body.email }, userWhereForPhone(body.phoneNumber, body.countryCode ?? null)],
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!row) {
+    throw new HttpError(400, "Invalid or expired signup code", undefined, "SIGNUP_OTP_INVALID");
+  }
+  const emailChannel = Boolean(row.email);
+  const ok = emailChannel
+    ? row.email === body.email
+    : row.phoneNumber === body.phoneNumber &&
+        (row.countryCode ?? null) === (body.countryCode ?? null);
+  if (!ok) {
+    throw new HttpError(400, "Invalid or expired signup code", undefined, "SIGNUP_OTP_INVALID");
+  }
+  await tx.signupVerification.update({
+    where: { id: row.id },
+    data: { consumedAt: new Date() },
+  });
+}
+
+exports.sendSignupOtp = asyncHandler(async (req, res) => {
+  const body = req.body;
+  const showCode = process.env.RETURN_SIGNUP_OTP_IN_RESPONSE === "true";
+
+  if (body.email) {
+    const existing = await prisma.user.findUnique({ where: { email: body.email } });
+    if (existing) {
+      throw new HttpError(409, "This email is already registered", undefined, "AUTH_EMAIL_IN_USE");
+    }
+    await prisma.signupVerification.updateMany({
+      where: { email: body.email, consumedAt: null },
+      data: { consumedAt: new Date() },
+    });
+  } else {
+    const existing = await prisma.user.findFirst({
+      where: userWhereForPhone(body.phoneNumber, body.countryCode ?? null),
+    });
+    if (existing) {
+      throw new HttpError(409, "This phone number is already registered", undefined, "AUTH_PHONE_IN_USE");
+    }
+    await prisma.signupVerification.updateMany({
+      where: {
+        phoneNumber: body.phoneNumber,
+        countryCode: body.countryCode ?? null,
+        consumedAt: null,
+      },
+      data: { consumedAt: new Date() },
+    });
+  }
+
+  const code = `${Math.floor(100000 + Math.random() * 900000)}`;
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+  await prisma.signupVerification.create({
+    data: {
+      email: body.email || null,
+      phoneNumber: body.email ? null : body.phoneNumber,
+      countryCode: body.email ? null : body.countryCode ?? null,
+      code,
+      expiresAt,
     },
   });
 
-  return res.apiCreated(authPayload(user, token, expiresIn), "CREATED");
+  const data = showCode
+    ? {
+        sent: true,
+        signupOtp: code,
+        expiresAt: expiresAt.toISOString(),
+        channel: body.email ? "email" : "phone",
+      }
+    : { sent: true, channel: body.email ? "email" : "phone" };
+
+  return res.apiSuccess(data, "OK", 200);
+});
+
+exports.register = asyncHandler(async (req, res) => {
+  const body = req.body;
+  const password = body.password ? await bcrypt.hash(body.password, SALT_ROUNDS) : null;
+
+  const educationOther =
+    body.educationStatus === "other" ? String(body.educationOtherDetail || "").trim() : null;
+  const schoolTrack = body.educationStatus === "school" ? body.schoolTrack : null;
+  const schoolGrade = body.educationStatus === "school" ? body.schoolGrade : null;
+  const universityYear = body.educationStatus === "university" ? body.universityYear : null;
+
+  const otpRequired = process.env.SIGNUP_OTP_REQUIRED === "true";
+  const markVerified = otpRequired;
+
+  let user;
+  try {
+    user = await prisma.$transaction(async (tx) => {
+      if (otpRequired) {
+        if (!body.signupOtp) {
+          throw new HttpError(400, "signupOtp is required", undefined, "SIGNUP_OTP_INVALID");
+        }
+        if (!signupOtpBypassesVerification(body.signupOtp)) {
+          await assertSignupOtpValid(tx, {
+            email: body.email,
+            phoneNumber: body.phoneNumber,
+            countryCode: body.countryCode,
+            signupOtp: body.signupOtp,
+          });
+        }
+      }
+
+      const fullNameStr = `${body.firstName} ${body.lastName}`.trim().slice(0, 150);
+      const username = await allocateUsername(tx, {
+        firstName: body.firstName,
+        lastName: body.lastName,
+        fullName: fullNameStr,
+      });
+      return tx.user.create({
+        data: {
+          firstName: body.firstName,
+          lastName: body.lastName,
+          email: body.email,
+          phoneNumber: body.phoneNumber,
+          countryCode: body.countryCode,
+          agreeTerms: body.agreeTerms,
+          rememberMe: body.rememberMe ?? false,
+          provider: body.provider,
+          providerId: body.providerId,
+          password,
+          fullName: fullNameStr,
+          username,
+          ...(body.gender ? { gender: body.gender } : {}),
+          educationStatus: body.educationStatus,
+          educationOtherDetail: educationOther,
+          schoolTrack,
+          schoolGrade,
+          universityYear,
+          isVerified: markVerified,
+        },
+      });
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      throw new HttpError(409, "Email or phone number is already in use", undefined, "UNIQUE_VIOLATION");
+    }
+    throw e;
+  }
+
+  return finalizeAuthResponse(res, user, body.rememberMe, true);
 });
 
 exports.login = asyncHandler(async (req, res) => {
   const body = req.body;
   const where = body.email
     ? { email: body.email }
-    : { phoneNumber: body.phoneNumber, countryCode: body.countryCode || undefined };
+    : userWhereForPhone(body.phoneNumber, body.countryCode ?? null);
 
   const user = await prisma.user.findFirst({ where });
   if (!user || !user.password) {
@@ -78,30 +281,67 @@ exports.login = asyncHandler(async (req, res) => {
     throw new HttpError(401, "Invalid credentials", undefined, "AUTH_INVALID_CREDENTIALS");
   }
 
-  const { token, expiresIn } = issueToken(user);
-  await prisma.userSession.create({
-    data: {
-      userId: user.id,
-      token,
-      isActive: true,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    },
-  });
+  if (typeof body.rememberMe === "boolean") {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { rememberMe: body.rememberMe },
+    });
+    user.rememberMe = body.rememberMe;
+  }
 
-  return res.apiSuccess(authPayload(user, token, expiresIn), "OK", 200);
+  return finalizeAuthResponse(res, user, body.rememberMe, false);
+});
+
+exports.oauthGoogle = asyncHandler(async (req, res) => {
+  const profile = await verifyGoogleIdToken(req.body.idToken);
+  const { user, created } = await upsertOAuthUser("google", profile, oauthExtrasFromBody(req.body));
+  return finalizeAuthResponse(res, user, req.body.rememberMe, created);
+});
+
+exports.oauthApple = asyncHandler(async (req, res) => {
+  const profile = await verifyAppleIdentityToken(req.body.identityToken);
+  const { user, created } = await upsertOAuthUser("apple", profile, oauthExtrasFromBody(req.body));
+  return finalizeAuthResponse(res, user, req.body.rememberMe, created);
+});
+
+exports.oauthFacebook = asyncHandler(async (req, res) => {
+  const profile = await verifyFacebookAccessToken(req.body.accessToken);
+  const { user, created } = await upsertOAuthUser("facebook", profile, oauthExtrasFromBody(req.body));
+  return finalizeAuthResponse(res, user, req.body.rememberMe, created);
 });
 
 exports.me = asyncHandler(async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: req.auth.sub } });
+  await ensureUsernameAssigned(prisma, req.auth.sub);
+  const user = await prisma.user.findUnique({
+    where: { id: req.auth.sub },
+    include: { userPreference: true },
+  });
   if (!user) throw new HttpError(404, "User not found", undefined, "USER_NOT_FOUND");
-  return res.apiSuccess({ user: userResponse(user) }, "OK", 200);
+  const { password, userPreference, ...safeUser } = user;
+  void password;
+  return res.apiSuccess({ user: safeUser, preference: userPreference ?? null }, "OK", 200);
+});
+
+exports.logout = asyncHandler(async (req, res) => {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : null;
+  if (!token) {
+    throw new HttpError(401, "Missing Bearer token", undefined, "AUTH_MISSING_TOKEN");
+  }
+  await prisma.userSession.updateMany({
+    where: { userId: req.auth.sub, token, isActive: true },
+    data: { isActive: false },
+  });
+  return res.apiSuccess({ loggedOut: true }, "OK", 200);
 });
 
 exports.forgotPassword = asyncHandler(async (req, res) => {
   const body = req.body;
-  const user = await prisma.user.findFirst({
-    where: body.email ? { email: body.email } : { phoneNumber: body.phoneNumber },
-  });
+  const where = body.email
+    ? { email: body.email }
+    : userWhereForPhone(body.phoneNumber, body.countryCode ?? null);
+
+  const user = await prisma.user.findFirst({ where });
 
   const showCode = process.env.RETURN_RESET_CODE_IN_RESPONSE === "true";
 

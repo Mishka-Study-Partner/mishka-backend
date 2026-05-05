@@ -2,6 +2,7 @@ const prisma = require("../utils/prisma");
 const asyncHandler = require("../utils/asyncHandler");
 const { notFound, badRequest } = require("../utils/httpError");
 const { assertOwnedOrAdmin, isAdmin } = require("../utils/authz");
+const { recordDailyStreakActivity } = require("../services/dailyStreakService");
 
 async function loadFlashcardWithSet(id) {
   return prisma.flashcard.findUnique({
@@ -39,6 +40,7 @@ exports.create = asyncHandler(async (req, res) => {
       setId,
     },
   });
+  void recordDailyStreakActivity(set.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
   res.apiCreated(row, "CREATED");
 });
 
@@ -54,6 +56,7 @@ exports.update = asyncHandler(async (req, res) => {
     where: { id: req.params.id },
     data,
   });
+  void recordDailyStreakActivity(existing.set.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
   res.apiSuccess(row, "OK", 200);
 });
 

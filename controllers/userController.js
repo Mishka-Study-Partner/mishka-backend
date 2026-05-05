@@ -4,6 +4,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const { notFound, badRequest } = require("../utils/httpError");
 const { requireFields } = require("../utils/validate");
 const { isAdmin } = require("../utils/authz");
+const { allocateUsername } = require("../utils/generateUsername");
 
 const SALT_ROUNDS = 10;
 
@@ -28,11 +29,20 @@ exports.create = asyncHandler(async (req, res) => {
   const body = req.body || {};
   requireFields(body, ["firstName", "lastName", "email", "agreeTerms"]);
 
+  const fn = body.firstName;
+  const ln = body.lastName;
+  const fullNameStr = (body.fullName || `${fn} ${ln}`).trim().slice(0, 150);
+  const username = await allocateUsername(prisma, {
+    firstName: fn,
+    lastName: ln,
+    fullName: fullNameStr,
+  });
+
   const data = {
-    firstName: body.firstName,
-    lastName: body.lastName,
-    fullName: body.fullName,
-    username: body.username,
+    firstName: fn,
+    lastName: ln,
+    fullName: body.fullName ?? fullNameStr,
+    username,
     email: body.email,
     phoneNumber: body.phoneNumber,
     countryCode: body.countryCode,
@@ -43,7 +53,7 @@ exports.create = asyncHandler(async (req, res) => {
     role: body.role,
     isVerified: body.isVerified,
     profileImageUrl: body.profileImageUrl,
-    gender: body.gender,
+    ...(body.gender !== undefined && body.gender !== null ? { gender: body.gender } : {}),
   };
 
   if (body.password) {
@@ -56,13 +66,16 @@ exports.create = asyncHandler(async (req, res) => {
 
 exports.update = asyncHandler(async (req, res) => {
   const body = req.body || {};
+  const id = req.params.id;
+  const existing = await prisma.user.findUnique({ where: { id } });
+  if (!existing) throw notFound("User not found", "USER_NOT_FOUND");
+
   const data = {};
 
   const fields = [
     "firstName",
     "lastName",
     "fullName",
-    "username",
     "email",
     "phoneNumber",
     "countryCode",
@@ -92,8 +105,22 @@ exports.update = asyncHandler(async (req, res) => {
     delete data.isVerified;
   }
 
+  const nameTouched =
+    data.firstName !== undefined || data.lastName !== undefined || data.fullName !== undefined;
+  if (nameTouched) {
+    const fn = data.firstName ?? existing.firstName;
+    const ln = data.lastName ?? existing.lastName;
+    const fnFull = (data.fullName ?? existing.fullName ?? `${fn} ${ln}`).trim().slice(0, 150);
+    data.username = await allocateUsername(prisma, {
+      firstName: fn,
+      lastName: ln,
+      fullName: fnFull,
+      excludeUserId: id,
+    });
+  }
+
   const user = await prisma.user.update({
-    where: { id: req.params.id },
+    where: { id },
     data,
   });
   res.apiSuccess(stripPassword(user), "OK", 200);
@@ -165,14 +192,6 @@ exports.listUserStreaks = asyncHandler(async (req, res) => {
   const rows = await prisma.userStreak.findMany({
     where: { userId: req.params.id },
     orderBy: { date: "desc" },
-  });
-  res.apiSuccess(rows, "OK", 200);
-});
-
-exports.listStudySessions = asyncHandler(async (req, res) => {
-  const rows = await prisma.studySession.findMany({
-    where: { userId: req.params.id },
-    orderBy: { sessionDate: "desc" },
   });
   res.apiSuccess(rows, "OK", 200);
 });

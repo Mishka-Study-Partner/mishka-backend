@@ -8,6 +8,13 @@ const {
 const { materializeToolContent } = require("./aiMaterializers");
 const { saveUploadedMaterial } = require("../utils/aiUploadStorage");
 
+function displayTitleFromUploadName(name) {
+  if (!name || typeof name !== "string") return null;
+  const t = name.replace(/[/\\]/g, "").trim();
+  if (!t) return null;
+  return t.slice(0, 200);
+}
+
 async function assertAiTutorSession(tx, sessionId, userId) {
   const session = await tx.chatSession.findFirst({
     where: { id: sessionId, userId },
@@ -72,6 +79,7 @@ async function persistUploadSuccess(userId, summaryLevel, upstreamStatus, upstre
       data: {
         id: sessionId,
         userId,
+        title: displayTitleFromUploadName(fileMeta.originalName),
         startedAt: new Date(),
         isActive: true,
         uploadStoredPath: stored.relativePath,
@@ -96,7 +104,7 @@ async function persistUploadSuccess(userId, summaryLevel, upstreamStatus, upstre
         inputType: "text",
       },
     });
-    await createAiRequestRow({
+    const uploadAiRow = await createAiRequestRow({
       tx,
       userId,
       chatSessionId: sessionId,
@@ -113,6 +121,16 @@ async function persistUploadSuccess(userId, summaryLevel, upstreamStatus, upstre
       },
       responsePayload: upstreamData,
       upstreamStatus,
+    });
+    await tx.summary.create({
+      data: {
+        userId,
+        summaryText: explanation.slice(0, 100000),
+        sourceType: "upload_model_response",
+        sourceReference: uploadAiRow.id,
+        chatSessionId: sessionId,
+        savedAt: null,
+      },
     });
   });
 }
@@ -178,14 +196,20 @@ async function persistGenerateToolsSuccess(userId, sessionId, toolType, complexi
       upstreamStatus,
     });
 
-    const result = await materializeToolContent(tx, userId, toolType, parsed.content);
-    if (toolType === "mind_maps" && result.mindMapTitle) {
+    const result = await materializeToolContent(tx, {
+      userId,
+      toolType,
+      content: parsed.content,
+      chatSessionId: sessionId,
+    });
+    if (toolType === "mind_maps" && result.mindMapId) {
       await tx.historyItem.create({
         data: {
           userId,
           featureType: "mind_map",
-          referenceId: aiRow.id,
-          title: result.mindMapTitle.slice(0, 500),
+          referenceId: result.mindMapId,
+          title: (result.mindMapTitle || "Mind map").slice(0, 500),
+          chatSessionId: sessionId,
         },
       });
     }

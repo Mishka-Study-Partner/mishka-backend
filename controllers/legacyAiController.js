@@ -5,6 +5,7 @@ const { HttpError } = require("../utils/httpError");
 const { preferredLanguage } = require("../utils/locale");
 const { messagesForCode } = require("../utils/errorMessages");
 const { persistUploadSuccess, persistChatSuccess, persistGenerateToolsSuccess } = require("../services/aiPersistence");
+const { recordDailyStreakActivity } = require("../services/dailyStreakService");
 
 const AI_BASE = () => process.env.AI_SERVICE_URL || "";
 
@@ -79,6 +80,7 @@ exports.upload = asyncHandler(async (req, res) => {
     } catch (e) {
       console.error("[ai] persist upload failed", e);
     }
+    void recordDailyStreakActivity(req.auth.sub).catch((err) => console.error("[dailyStreak]", err?.message || err));
     return res.status(r.status).json(successEnvelope(req, r.data, r.status));
   }
   return res.status(r.status >= 400 ? r.status : 502).json(errorEnvelope(req, r.status, r.data));
@@ -101,6 +103,7 @@ exports.chat = asyncHandler(async (req, res) => {
     } catch (e) {
       console.error("[ai] persist chat failed", e);
     }
+    void recordDailyStreakActivity(req.auth.sub).catch((err) => console.error("[dailyStreak]", err?.message || err));
     return res.status(r.status).json(successEnvelope(req, r.data, r.status));
   }
   return res.status(r.status >= 400 ? r.status : 502).json(errorEnvelope(req, r.status, r.data));
@@ -132,6 +135,7 @@ exports.generateTools = asyncHandler(async (req, res) => {
     } catch (e) {
       console.error("[ai] persist generate-tools failed", e);
     }
+    void recordDailyStreakActivity(req.auth.sub).catch((err) => console.error("[dailyStreak]", err?.message || err));
     return res.status(r.status).json(successEnvelope(req, r.data, r.status));
   }
   return res.status(r.status >= 400 ? r.status : 502).json(errorEnvelope(req, r.status, r.data));

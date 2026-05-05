@@ -2,6 +2,7 @@ const prisma = require("../utils/prisma");
 const asyncHandler = require("../utils/asyncHandler");
 const { createCrudHandlers } = require("../utils/prismaCrud");
 const { assertOwnedOrAdmin, ownedWhere } = require("../utils/authz");
+const { recordDailyStreakActivity } = require("../services/dailyStreakService");
 
 const crud = createCrudHandlers("todoList", {
   include: { icon: true },
@@ -42,5 +43,6 @@ exports.createTask = asyncHandler(async (req, res) => {
       userId: list.userId,
     },
   });
+  void recordDailyStreakActivity(list.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
   res.apiCreated(row, "CREATED");
 });

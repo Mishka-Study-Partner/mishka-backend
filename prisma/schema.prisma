@@ -27,6 +27,7 @@ enum AiToolKind {
 enum StreakRecordStatus {
   completed
   missed
+  frozen
 }
 
 enum TaskStatus {
@@ -57,6 +58,40 @@ enum SenderKind {
   ai
 }
 
+enum EducationStatus {
+  school
+  university
+  other
+}
+
+enum SchoolTrack {
+  middle_school
+  high_school
+}
+
+/// Hybrid usage: foreground segment (navigation boundaries) vs heartbeat delta (same screen).
+enum UsageIngestKind {
+  segment
+  heartbeat
+}
+
+enum Gender {
+  male
+  female
+  prefer_not_to_say
+}
+
+enum CommunityVisibility {
+  public
+  private
+}
+
+enum CommunityMemberRole {
+  owner
+  admin
+  member
+}
+
 // --- Users (merged: signup + profile + most complete ERD) ---
 
 model User {
@@ -76,26 +111,46 @@ model User {
   role             UserRole @default(student)
   isVerified       Boolean  @default(false) @map("is_verified")
   profileImageUrl  String?  @map("profile_image_url")
-  gender           String?  @db.VarChar(20)
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  gender             Gender?
+
+  educationStatus      EducationStatus? @map("education_status")
+  educationOtherDetail String?          @map("education_other_detail") @db.VarChar(500)
+  schoolTrack          SchoolTrack?     @map("school_track")
+  schoolGrade          Int?             @map("school_grade")
+  universityYear       Int?             @map("university_year")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   passwordResetTokens PasswordResetToken[]
   userPreference      UserPreference?
   authSessions        UserSession[]
   userStreaks         UserStreak[]
+  dailyStreakMeta     UserDailyStreakMeta?
   savedCategories     UserSavedCategory[]
   userCommunities     UserCommunity[]
   userAiActivities    UserAiActivity[]
   chatSessions        ChatSession[]
+  communitiesOwned    Community[]          @relation("CommunityOwner")
   aiRequests          AiRequest[]
   flashcardSets       FlashcardSet[]
   quizzes             Quiz[]
+  quizAttempts        QuizAttempt[]
   summaries           Summary[]
+  mindMaps            MindMap[]
   historyItems        HistoryItem[]
   todoLists           TodoList[]
   tasks               Task[]
-  studySessions       StudySession[]
+  studyCustomTimerPresets        StudyCustomTimerPreset[]
+  studyConcentrationSessions     StudyConcentrationSession[]
+  usageLedger         UserUsageLedger[]
+  usageDailyRollups   UserUsageDailyRollup[]
+  materialShares           MaterialShare[]
+  userCommunityChannels    UserCommunityChannel[]
+  communityChannelMessages CommunityChannelMessage[]
+  savedCommunities         UserSavedCommunity[]
+  /// Community groups (channels) this user created (metadata for "created by").
+  communityChannelsCreated CommunityChannel[] @relation("CommunityChannelCreatedBy")
 
   @@map("users")
 }
@@ -112,6 +167,35 @@ model PasswordResetToken {
 
   @@index([userId])
   @@map("password_reset_tokens")
+}
+
+/// One-time codes before account creation (email or phone). Rows with `consumed_at` set are inactive.
+model SignupVerification {
+  id          String    @id @default(uuid()) @map("verification_id")
+  email       String?   @db.VarChar(150)
+  phoneNumber String?   @map("phone_number") @db.VarChar(20)
+  countryCode String?   @map("country_code") @db.VarChar(5)
+  code        String    @map("code") @db.VarChar(10)
+  expiresAt   DateTime  @map("expires_at")
+  consumedAt  DateTime? @map("consumed_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([email])
+  @@index([phoneNumber, countryCode])
+  @@map("signup_verifications")
+}
+
+/// Singleton row: use `id` = `default`. Privacy policy text and optional help & support contacts (admin-managed).
+model AppPublicSettings {
+  id                   String   @id @map("settings_id")
+  privacyPolicyText    String   @default("") @map("privacy_policy_text")
+  supportEmail         String?  @map("support_email") @db.VarChar(200)
+  supportPhone         String?  @map("support_phone") @db.VarChar(40)
+  supportFacebookUrl   String?  @map("support_facebook_url") @db.VarChar(500)
+  supportInstagramUrl  String?  @map("support_instagram_url") @db.VarChar(500)
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("app_public_settings")
 }
 
 model UserPreference {
@@ -159,8 +243,57 @@ model UserStreak {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, date])
   @@index([userId])
   @@map("user_streaks")
+}
+
+/// Cached counters for daily activity streak (UTC calendar days).
+model UserDailyStreakMeta {
+  userId           String   @id @map("user_id")
+  currentStreak    Int      @default(0) @map("current_streak")
+  longestStreak    Int      @default(0) @map("longest_streak")
+  freezesRemaining Int      @default(2) @map("freezes_remaining")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_daily_streak_meta")
+}
+
+/// Client-reported usage row (idempotent via clientRequestId). Rollups updated in the same transaction.
+model UserUsageLedger {
+  id              String            @id @default(uuid()) @map("ledger_id")
+  userId          String            @map("user_id")
+  kind            UsageIngestKind   @map("kind")
+  featureKey      String            @map("feature_key") @db.VarChar(64)
+  dayUtc          DateTime          @map("day_utc") @db.Date
+  startedAt       DateTime?         @map("started_at")
+  endedAt         DateTime?         @map("ended_at")
+  seconds         Int               @map("seconds")
+  chatSessionId   String?           @map("chat_session_id") @db.VarChar(36)
+  clientRequestId String            @map("client_request_id") @db.VarChar(80)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, clientRequestId])
+  @@index([userId, dayUtc])
+  @@map("user_usage_ledger")
+}
+
+/// Per-user UTC day + feature totals for fast summaries.
+model UserUsageDailyRollup {
+  id           String   @id @default(uuid()) @map("rollup_id")
+  userId       String   @map("user_id")
+  date         DateTime @db.Date
+  featureKey   String   @map("feature_key") @db.VarChar(64)
+  totalSeconds Int      @map("total_seconds")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date, featureKey])
+  @@index([userId, date])
+  @@map("user_usage_daily_rollup")
 }
 
 model AiTool {
@@ -178,36 +311,194 @@ model AiTool {
   @@map("ai_tools")
 }
 
-/// Study With Mishka — timed study blocks
-model StudySession {
-  id         String    @id @default(uuid()) @map("session_id")
-  userId     String    @map("user_id")
-  title      String?   @db.VarChar(200)
-  imageUrl   String?   @map("image_url")
-  duration   Int? /// minutes
-  sessionDate DateTime @map("date") @db.Date
-  createdAt  DateTime  @default(now()) @map("created_at")
+enum StudyTopLevelMode {
+  call_with_mishka
+  concentration
+}
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+enum StudyConcentrationPreset {
+  classic_pomodoro
+  flowtime
+  ultradian
+  quick_sprint
+  task_based
+  custom
+}
+
+enum StudyBlockSessionStatus {
+  active
+  paused
+  completed
+  abandoned
+}
+
+enum StudyBlockPhase {
+  none
+  focus
+  short_break
+  long_break
+}
+
+enum StudyCheckInKind {
+  still_there_yes_no
+  mood_scale_5
+  mood_scale_10
+  progress_yes_no
+}
+
+/// User-saved custom Pomodoro-style timer (recent list via lastUsedAt).
+model StudyCustomTimerPreset {
+  id                       String    @id @default(uuid()) @map("preset_id")
+  userId                   String    @map("user_id")
+  name                     String?   @db.VarChar(120)
+  focusMinutes             Int       @map("focus_minutes")
+  shortBreakMinutes        Int       @map("short_break_minutes")
+  longBreakMinutes         Int       @map("long_break_minutes")
+  pomodorosBeforeLongBreak Int       @default(4) @map("pomodoros_before_long_break")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  lastUsedAt               DateTime? @map("last_used_at")
+
+  user     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions StudyConcentrationSession[]
 
   @@index([userId])
-  @@map("study_sessions")
+  @@index([userId, lastUsedAt(sort: Desc)])
+  @@map("study_custom_timer_presets")
+}
+
+/// Active / completed concentration or “call with Mishka” timed block (pause / resume / end).
+model StudyConcentrationSession {
+  id                    String                   @id @default(uuid()) @map("session_id")
+  userId                String                   @map("user_id")
+  customPresetId        String?                  @map("custom_preset_id")
+  topLevelMode          StudyTopLevelMode        @map("top_level_mode")
+  concentrationPreset   StudyConcentrationPreset? @map("concentration_preset")
+  status                StudyBlockSessionStatus  @default(active)
+  phase                 StudyBlockPhase          @default(focus)
+
+  title                String? @db.VarChar(200)
+  taskEstimatedMinutes Int?    @map("task_estimated_minutes")
+
+  focusMinutesPlanned      Int? @map("focus_minutes_planned")
+  shortBreakMinutesPlanned Int? @map("short_break_minutes_planned")
+  longBreakMinutesPlanned  Int? @map("long_break_minutes_planned")
+  cyclesTarget             Int? @map("cycles_target")
+  cyclesCompleted          Int  @default(0) @map("cycles_completed")
+  pomodorosBeforeLongBreak Int  @default(4) @map("pomodoros_before_long_break")
+  pomodorosSinceLongBreak  Int  @default(0) @map("pomodoros_since_long_break")
+
+  startedAt                 DateTime  @default(now()) @map("started_at")
+  endedAt                   DateTime? @map("ended_at")
+  pausedAt                  DateTime? @map("paused_at")
+  totalPausedSeconds        Int       @default(0) @map("total_paused_seconds")
+  currentPhaseStartedAt     DateTime? @map("current_phase_started_at")
+  lastCompletedFocusMinutes Int?      @map("last_completed_focus_minutes")
+
+  /// Call-with-Mishka: parallel break timer (does not replace session pause).
+  callBreakActive       Boolean   @default(false) @map("call_break_active")
+  callBreakStartedAt    DateTime? @map("call_break_started_at")
+  totalCallBreakSeconds Int       @default(0) @map("total_call_break_seconds")
+
+  /// Optional string tags (normalized array JSON, max length enforced in API).
+  tags Json? @map("tags")
+  /// Linked todo task (same owner).
+  linkedTaskId String? @map("linked_task_id") @db.Uuid
+  /// Optional reflection when ending session.
+  outcomeNotes String? @map("outcome_notes") @db.VarChar(2000)
+  clientAppVersion String? @map("client_app_version") @db.VarChar(40)
+  platform          String? @db.VarChar(40)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user           User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customPreset   StudyCustomTimerPreset?    @relation(fields: [customPresetId], references: [id], onDelete: SetNull)
+  linkedTask     Task?                      @relation(fields: [linkedTaskId], references: [id], onDelete: SetNull)
+  checkIns       StudyConcentrationCheckIn[]
+  activityEvents StudySessionActivityEvent[]
+  mlReports      StudySessionMlReport[]
+
+  @@index([userId, status])
+  @@index([userId, startedAt(sort: Desc)])
+  @@index([linkedTaskId])
+  @@map("study_concentration_sessions")
+}
+
+/// Fine-grained client activity for session reports (camera toggle, phases, breaks, navigation, etc.).
+model StudySessionActivityEvent {
+  id        String    @id @default(uuid()) @map("activity_event_id")
+  sessionId String    @map("session_id")
+  eventType String    @map("event_type") @db.VarChar(80)
+  payload   Json?
+  clientTs  DateTime? @map("client_ts")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  session StudyConcentrationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([sessionId, createdAt(sort: Desc)])
+  @@map("study_session_activity_events")
+}
+
+/// On-device ML focus-tracking summaries (no raw video stored server-side).
+model StudySessionMlReport {
+  id             String   @id @default(uuid()) @map("ml_report_id")
+  sessionId      String   @map("session_id")
+  payload        Json     @map("payload")
+  /// Optional ML bundle version once schema stabilizes.
+  schemaVersion  Int?     @map("schema_version")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  session StudyConcentrationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([sessionId, createdAt(sort: Desc)])
+  @@map("study_session_ml_reports")
+}
+
+/// In-session pop-up answers (still there, mood, progress).
+model StudyConcentrationCheckIn {
+  id           String           @id @default(uuid()) @map("check_in_id")
+  sessionId    String           @map("session_id")
+  kind         StudyCheckInKind @map("kind")
+  responseBool Boolean?         @map("response_bool")
+  responseInt  Int?             @map("response_int")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  session StudyConcentrationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("study_concentration_check_ins")
 }
 
 model Community {
-  id       String @id @default(uuid()) @map("community_id")
-  name     String @db.VarChar(200)
-  category String @db.VarChar(100)
+  id          String              @id @default(uuid()) @map("community_id")
+  name        String              @db.VarChar(200)
+  category    String              @db.VarChar(100)
+  description String?
+  imageUrl    String?             @map("image_url") @db.VarChar(500)
+  visibility  CommunityVisibility @default(public)
+  /// Creator / sole owner (cannot be demoted by admins).
+  ownerUserId String?             @map("owner_user_id")
+  /// Short code for private join (optional until private created).
+  inviteCode  String?             @unique @map("invite_code") @db.VarChar(32)
+  /// UUID token for private invite links.
+  inviteToken String?             @unique @map("invite_token") @db.VarChar(36)
 
-  members UserCommunity[]
+  members        UserCommunity[]
+  channels       CommunityChannel[]
+  owner          User?              @relation("CommunityOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  savedByUsers UserSavedCommunity[]
 
+  @@index([ownerUserId])
   @@map("communities")
 }
 
 model UserCommunity {
-  id            String @id @default(uuid())
-  userId        String @map("user_id")
-  communityId   String @map("community_id")
+  id            String               @id @default(uuid())
+  userId        String               @map("user_id")
+  communityId   String               @map("community_id")
+  role          CommunityMemberRole  @default(member)
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
@@ -215,6 +506,36 @@ model UserCommunity {
   @@unique([userId, communityId])
   @@index([communityId])
   @@map("user_communities")
+}
+
+/// Member joined a specific group (channel) inside a community.
+model UserCommunityChannel {
+  id                 String   @id @default(uuid())
+  userId             String   @map("user_id")
+  communityChannelId String   @map("community_channel_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel CommunityChannel @relation(fields: [communityChannelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, communityChannelId])
+  @@index([communityChannelId])
+  @@map("user_community_channels")
+}
+
+/// Bookmark after leaving a community (optional).
+model UserSavedCommunity {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  communityId String   @map("community_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, communityId])
+  @@index([communityId])
+  @@map("user_saved_communities")
 }
 
 model Category {
@@ -265,6 +586,8 @@ model UserAiActivity {
 model ChatSession {
   id        String    @id @default(uuid()) @map("session_id")
   userId    String    @map("user_id")
+  /// Display name (default from upload filename); user can rename via API.
+  title     String?   @map("title") @db.VarChar(200)
   startedAt DateTime  @map("started_at")
   endedAt   DateTime? @map("ended_at")
   isActive  Boolean   @default(true) @map("is_active")
@@ -276,9 +599,14 @@ model ChatSession {
   uploadMimeType         String? @map("upload_mime_type") @db.VarChar(255)
   uploadSizeBytes        Int?    @map("upload_size_bytes")
 
-  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages ChatMessage[]
-  aiRequests AiRequest[]
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      ChatMessage[]
+  aiRequests    AiRequest[]
+  quizzes       Quiz[]
+  flashcardSets FlashcardSet[]
+  summaries     Summary[]
+  mindMaps      MindMap[]
+  historyItems  HistoryItem[]
 
   @@index([userId])
   @@map("chat_sessions")
@@ -324,17 +652,23 @@ model AiRequest {
 }
 
 model FlashcardSet {
-  id              String   @id @default(uuid()) @map("set_id")
-  userId          String   @map("user_id")
-  title           String   @db.VarChar(150)
-  sourceType      String   @map("source_type") @db.VarChar(50)
-  sourceReference String?  @map("source_reference")
-  createdAt       DateTime @default(now()) @map("created_at")
+  id              String    @id @default(uuid()) @map("set_id")
+  userId          String    @map("user_id")
+  title           String    @db.VarChar(150)
+  sourceType      String    @map("source_type") @db.VarChar(50)
+  sourceReference String?   @map("source_reference")
+  /// AI tutor session that produced this set (if any).
+  chatSessionId   String?   @map("chat_session_id")
+  /// When set, user saved this set to their library from chat/history.
+  savedAt         DateTime? @map("saved_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  flashcards Flashcard[]
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatSession ChatSession? @relation(fields: [chatSessionId], references: [id], onDelete: SetNull)
+  flashcards  Flashcard[]
 
   @@index([userId])
+  @@index([chatSessionId])
   @@map("flashcard_sets")
 }
 
@@ -352,19 +686,45 @@ model Flashcard {
 }
 
 model Quiz {
-  id               String   @id @default(uuid()) @map("quiz_id")
-  userId           String   @map("user_id")
-  title            String   @db.VarChar(150)
-  sourceType       String   @map("source_type") @db.VarChar(50)
-  sourceReference  String?  @map("source_reference")
-  totalQuestions   Int      @default(0) @map("total_questions")
-  createdAt        DateTime @default(now()) @map("created_at")
+  id               String    @id @default(uuid()) @map("quiz_id")
+  userId           String    @map("user_id")
+  title            String    @db.VarChar(150)
+  sourceType       String    @map("source_type") @db.VarChar(50)
+  sourceReference  String?   @map("source_reference")
+  /// AI tutor session that produced this quiz (if any).
+  chatSessionId    String?   @map("chat_session_id")
+  /// When set, user saved this quiz to their library from chat/history.
+  savedAt          DateTime? @map("saved_at")
+  totalQuestions   Int       @default(0) @map("total_questions")
+  createdAt        DateTime  @default(now()) @map("created_at")
 
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  questions QuizQuestion[]
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatSession ChatSession?   @relation(fields: [chatSessionId], references: [id], onDelete: SetNull)
+  questions   QuizQuestion[]
+  attempts    QuizAttempt[]
 
   @@index([userId])
+  @@index([chatSessionId])
   @@map("quizzes")
+}
+
+/// One graded run of a quiz by a user (for history and badge thresholds using scoreOutOfTen).
+model QuizAttempt {
+  id               String   @id @default(uuid()) @map("attempt_id")
+  userId           String   @map("user_id")
+  quizId           String   @map("quiz_id")
+  correctCount     Int      @map("correct_count")
+  totalQuestions   Int      @map("total_questions")
+  /// Rounded (correct/total)*10 clamped 0–10; use for app badges when quiz length ≠ 10.
+  scoreOutOfTen    Int      @map("score_out_of_ten")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz Quiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  @@index([userId, quizId])
+  @@index([quizId])
+  @@map("quiz_attempts")
 }
 
 model QuizQuestion {
@@ -385,31 +745,118 @@ model QuizQuestion {
 }
 
 model Summary {
-  id               String   @id @default(uuid()) @map("summary_id")
-  userId           String   @map("user_id")
-  sourceType       String   @map("source_type") @db.VarChar(50)
-  sourceReference  String?  @map("source_reference")
-  summaryText      String   @map("summary_text")
-  createdAt        DateTime @default(now()) @map("created_at")
+  id               String    @id @default(uuid()) @map("summary_id")
+  userId           String    @map("user_id")
+  sourceType       String    @map("source_type") @db.VarChar(50)
+  sourceReference  String?   @map("source_reference")
+  summaryText      String    @map("summary_text")
+  /// Tutor session when this summary is the upload model explanation.
+  chatSessionId    String?   @map("chat_session_id")
+  /// When set, user saved this summary to their library.
+  savedAt          DateTime? @map("saved_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatSession ChatSession? @relation(fields: [chatSessionId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([chatSessionId])
   @@map("summaries")
 }
 
-model HistoryItem {
-  id           String   @id @default(uuid()) @map("history_id")
-  userId       String   @map("user_id")
-  featureType  String   @map("feature_type") @db.VarChar(50)
-  referenceId  String   @map("reference_id")
-  title        String
-  createdAt    DateTime @default(now()) @map("created_at")
+/// Mind map tree from AI generate-tools (`mind_maps`); shareable like quizzes.
+model MindMap {
+  id              String    @id @default(uuid()) @map("mind_map_id")
+  userId          String    @map("user_id")
+  title           String    @db.VarChar(500)
+  content         Json      @map("content")
+  sourceType      String    @map("source_type") @db.VarChar(50)
+  sourceReference String?   @map("source_reference") @db.VarChar(255)
+  chatSessionId   String?   @map("chat_session_id")
+  savedAt         DateTime? @map("saved_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatSession ChatSession? @relation(fields: [chatSessionId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([chatSessionId])
+  @@map("mind_maps")
+}
+
+model HistoryItem {
+  id             String   @id @default(uuid()) @map("history_id")
+  userId         String   @map("user_id")
+  featureType    String   @map("feature_type") @db.VarChar(50)
+  referenceId    String   @map("reference_id")
+  title          String
+  chatSessionId  String?      @map("chat_session_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatSession ChatSession? @relation(fields: [chatSessionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([chatSessionId])
   @@map("history_items")
+}
+
+/// Group chat / channel inside a community (for sharing tutor material).
+model CommunityChannel {
+  id              String   @id @default(uuid()) @map("channel_id")
+  communityId     String   @map("community_id")
+  title           String   @db.VarChar(200)
+  description     String?
+  imageUrl        String?  @map("image_url") @db.VarChar(500)
+  createdAt       DateTime @default(now()) @map("created_at")
+  /// User who created this group (owner or admin); null on legacy rows before migration.
+  createdByUserId String?  @map("created_by_user_id")
+
+  community       Community                 @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  createdBy       User?                     @relation("CommunityChannelCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  materialShares  MaterialShare[]
+  groupMembers    UserCommunityChannel[]
+  channelMessages CommunityChannelMessage[]
+
+  @@index([communityId])
+  @@index([createdByUserId])
+  @@map("community_channels")
+}
+
+/// Group chat message (text or in-app material reference only).
+model CommunityChannelMessage {
+  id                 String   @id @default(uuid()) @map("message_id")
+  communityChannelId String   @map("community_channel_id")
+  userId             String   @map("user_id")
+  messageContent     String   @map("message_content")
+  inputType          String   @default("text") @map("input_type") @db.VarChar(20)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  channel CommunityChannel @relation(fields: [communityChannelId], references: [id], onDelete: Cascade)
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([communityChannelId])
+  @@index([userId])
+  @@map("community_channel_messages")
+}
+
+/// User shared tutor material (quiz, flashcard set, summary, mind map) into a community channel.
+model MaterialShare {
+  id                 String   @id @default(uuid()) @map("share_id")
+  userId             String   @map("user_id")
+  communityChannelId String   @map("community_channel_id")
+  materialType       String   @map("material_type") @db.VarChar(50)
+  materialId         String   @map("material_id") @db.VarChar(36)
+  note               String?  @map("note") @db.VarChar(500)
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  user    User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel CommunityChannel @relation(fields: [communityChannelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, communityChannelId, materialType, materialId])
+  @@index([communityChannelId])
+  @@index([userId])
+  @@map("material_shares")
 }
 
 model Icon {
@@ -453,8 +900,9 @@ model Task {
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
-  user User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  list TodoList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  user                     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  list                     TodoList                  @relation(fields: [listId], references: [id], onDelete: Cascade)
+  studyConcentrationSessions StudyConcentrationSession[]
 
   @@index([userId])
   @@index([listId])

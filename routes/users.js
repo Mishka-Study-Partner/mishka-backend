@@ -19,7 +19,6 @@ router.get("/:id/quizzes", selfOrAdmin, c.listQuizzes);
 router.get("/:id/summaries", selfOrAdmin, c.listSummaries);
 router.get("/:id/history-items", selfOrAdmin, c.listHistoryItems);
 router.get("/:id/streaks", selfOrAdmin, c.listUserStreaks);
-router.get("/:id/study-sessions", selfOrAdmin, c.listStudySessions);
 router.get("/:id/communities", selfOrAdmin, c.listUserCommunities);
 router.get("/:id/saved-categories", selfOrAdmin, c.listSavedCategories);
 router.get("/:id/ai-requests", selfOrAdmin, c.listAiRequests);

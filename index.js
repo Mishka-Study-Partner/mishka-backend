@@ -8,8 +8,10 @@ const { apiEnvelope } = require("./middleware/apiEnvelope");
 const { requireAuth } = require("./middleware/auth");
 const upload = require("./middleware/upload");
 const { validate } = require("./middleware/validateRequest");
+const { requireAdmin } = require("./middleware/authorize");
 const legacyAi = require("./controllers/legacyAiController");
-const { aiChatSchema, aiGenerateToolsSchema } = require("./validation/schemas");
+const appPublicSettings = require("./controllers/appPublicSettingsController");
+const { aiChatSchema, aiGenerateToolsSchema, updateAppPublicSettingsSchema } = require("./validation/schemas");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -57,6 +59,8 @@ app.get("/", (req, res) => {
 
 app.use("/auth", require("./routes/auth"));
 
+app.get("/public/app-settings", appPublicSettings.get);
+
 if (process.env.DISABLE_SWAGGER !== "true") {
   const { setupSwagger } = require("./swagger");
   setupSwagger(app);
@@ -67,6 +71,7 @@ app.post("/chat", requireAuth, validate(aiChatSchema), legacyAi.chat);
 app.post("/generate-tools", requireAuth, validate(aiGenerateToolsSchema), legacyAi.generateTools);
 
 app.use(requireAuth);
+app.put("/public/app-settings", requireAdmin, validate(updateAppPublicSettingsSchema), appPublicSettings.put);
 app.use("/users", require("./routes/users"));
 app.use("/password-reset-tokens", require("./routes/passwordResetTokens"));
 app.use("/user-preferences", require("./routes/userPreferences"));
@@ -74,7 +79,7 @@ app.use("/user-sessions", require("./routes/userSessions"));
 app.use("/tips", require("./routes/tips"));
 app.use("/user-streaks", require("./routes/userStreaks"));
 app.use("/ai-tools", require("./routes/aiTools"));
-app.use("/study-sessions", require("./routes/studySessions"));
+app.use("/study-with-mishka", require("./routes/studyWithMishka"));
 app.use("/communities", require("./routes/communities"));
 app.use("/user-communities", require("./routes/userCommunities"));
 app.use("/categories", require("./routes/categories"));
@@ -84,14 +89,22 @@ app.use("/chat-sessions", require("./routes/chatSessions"));
 app.use("/chat-messages", require("./routes/chatMessages"));
 app.use("/ai-requests", require("./routes/aiRequests"));
 app.use("/flashcard-sets", require("./routes/flashcardSets"));
+app.use("/saved-flashcard-sets", require("./routes/savedFlashcardSets"));
 app.use("/flashcards", require("./routes/flashcards"));
 app.use("/quizzes", require("./routes/quizzes"));
+app.use("/saved-quizzes", require("./routes/savedQuizzes"));
 app.use("/quiz-questions", require("./routes/quizQuestions"));
 app.use("/summaries", require("./routes/summaries"));
+app.use("/saved-summaries", require("./routes/savedSummaries"));
+app.use("/mind-maps", require("./routes/mindMaps"));
+app.use("/saved-mind-maps", require("./routes/savedMindMaps"));
 app.use("/history-items", require("./routes/historyItems"));
 app.use("/todo-lists", require("./routes/todoLists"));
 app.use("/icons", require("./routes/icons"));
 app.use("/tasks", require("./routes/tasks"));
+app.use("/daily-streaks", require("./routes/dailyStreaks"));
+app.use("/usage", require("./routes/usage"));
+app.use("/material-shares", require("./routes/materialShares"));
 
 app.use((_req, _res, next) => {
   next(new HttpError(404, "Route not found", undefined, "NOT_FOUND"));

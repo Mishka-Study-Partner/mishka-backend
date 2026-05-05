@@ -17,7 +17,7 @@ async function readEnvelope(res) {
 async function main() {
   const uniq = Date.now();
   const email = `smoke_${uniq}@example.com`;
-  const password = "smokePass123";
+  const password = "Smoke1!Pass9";
 
   const registerRes = await fetch(`${baseUrl}/auth/register`, {
     method: "POST",
@@ -28,6 +28,12 @@ async function main() {
       email,
       password,
       agreeTerms: true,
+      rememberMe: false,
+      phoneNumber: `555${String(uniq).slice(-7)}`,
+      countryCode: "+1",
+      educationStatus: "school",
+      schoolTrack: "middle_school",
+      schoolGrade: 1,
     }),
   });
   const registerJson = await readEnvelope(registerRes);
@@ -88,7 +94,7 @@ async function main() {
     body: JSON.stringify({
       userId,
       resetCode: tokenRow.resetCode,
-      newPassword: "smokePass456",
+      newPassword: "Smoke1!Pass8",
     }),
   });
   const resetJson = await readEnvelope(resetRes);

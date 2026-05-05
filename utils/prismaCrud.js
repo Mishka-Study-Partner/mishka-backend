@@ -1,6 +1,23 @@
 const prisma = require("./prisma");
 const { notFound, badRequest } = require("./httpError");
 const { assertOwnedOrAdmin, isAdmin, ownedWhere } = require("./authz");
+const { recordDailyStreakActivity } = require("../services/dailyStreakService");
+
+/** Delegates that must not trigger daily streak updates (recursion, auth noise, prefs). */
+const DAILY_STREAK_EXCLUDE = new Set(["userStreak", "userSession", "userPreference", "passwordResetToken"]);
+
+/**
+ * @param {string} delegate
+ * @param {Record<string, unknown> | null | undefined} row
+ */
+function scheduleDailyStreak(delegate, row) {
+  if (DAILY_STREAK_EXCLUDE.has(delegate)) return;
+  const uid = row && typeof row.userId === "string" ? row.userId : null;
+  if (!uid) return;
+  void recordDailyStreakActivity(uid).catch((err) => {
+    console.error("[dailyStreak]", delegate, err?.message || err);
+  });
+}
 
 function parseId(raw, idType) {
   if (idType === "int") {
@@ -60,6 +77,7 @@ function createCrudHandlers(delegate, options = {}) {
         data,
         include: options.include,
       });
+      scheduleDailyStreak(delegate, row);
       res.apiCreated(row, "CREATED");
     },
 
@@ -81,6 +99,7 @@ function createCrudHandlers(delegate, options = {}) {
         data,
         include: options.include,
       });
+      scheduleDailyStreak(delegate, row);
       res.apiSuccess(row, "OK", 200);
     },
 
