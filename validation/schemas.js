@@ -704,6 +704,56 @@ const quizSubmitSchema = z
   })
   .strict();
 
+function emptyQueryToUndefined(val) {
+  if (val === undefined || val === null || val === "") return undefined;
+  return val;
+}
+
+/** GET /tasks, GET /todo-lists/:id/tasks, GET /users/:id/tasks — UTC date filters on `dueDate`/`dueTime`. */
+const taskListQuerySchema = z
+  .object({
+    userId: z.string().uuid().optional(),
+    q: z.preprocess(emptyQueryToUndefined, z.string().max(255).optional()),
+    status: z.preprocess(emptyQueryToUndefined, z.string().max(80).optional()),
+    listId: z.string().uuid().optional(),
+    dueDateFrom: z.preprocess(emptyQueryToUndefined, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
+    dueDateTo: z.preprocess(emptyQueryToUndefined, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
+    dueOn: z.preprocess(emptyQueryToUndefined, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
+    upcomingOnly: z
+      .union([z.boolean(), z.literal("true"), z.literal("false")])
+      .optional()
+      .transform((v) => {
+        if (v === undefined || v === null) return false;
+        return v === true || v === "true";
+      }),
+    withinDays: z.preprocess(
+      (v) => (v === "" || v === undefined ? undefined : v),
+      z.coerce.number().int().min(0).max(366).optional()
+    ),
+    limit: z.coerce.number().int().min(1).max(200).optional().default(100),
+    offset: z.coerce.number().int().min(0).optional().default(0),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.dueOn && (data.dueDateFrom || data.dueDateTo)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Use dueOn alone or dueDateFrom/dueDateTo, not both",
+        path: ["dueOn"],
+      });
+    }
+  });
+
+/** GET /todo-lists, GET /users/:id/todo-lists */
+const todoListQuerySchema = z
+  .object({
+    q: z.preprocess(emptyQueryToUndefined, z.string().max(255).optional()),
+    listType: z.enum(["calendar", "college", "work", "personal"]).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+    offset: z.coerce.number().int().min(0).optional().default(0),
+  })
+  .strict();
+
 module.exports = {
   passwordPolicy,
   registerSchema,
@@ -753,4 +803,6 @@ module.exports = {
   studyTelemetryBatchSchema,
   studyMlReportSchema,
   studyCallBreakEndSchema,
+  taskListQuerySchema,
+  todoListQuerySchema,
 };

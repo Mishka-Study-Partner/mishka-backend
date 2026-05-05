@@ -1,5 +1,6 @@
 const components = require("./components");
 const paths = require("./paths");
+const { enrichOpenApiSpec } = require("./specEnrich");
 
 const tags = [
   { name: "Public", description: "No authentication." },
@@ -62,8 +63,16 @@ const tags = [
   },
   { name: "Categories", description: "Category catalog and saved-by-users relations. Standard list/object `data` patterns." },
   { name: "Icons", description: "Icon catalog. Admin writes; **GET** lists for authenticated users." },
-  { name: "Todo lists", description: "Todo lists and nested tasks. Owner-scoped unless admin." },
-  { name: "Tasks", description: "Tasks CRUD (scoped). **POST** returns **201** with created row in `data`." },
+  {
+    name: "Todo lists",
+    description:
+      "Todo lists (**listName**, **listType**, optional **iconId**) and nested **`/{id}/tasks`**. **`GET /`** supports **`q`**, **`listType`**, **`limit`**, **`offset`**.",
+  },
+  {
+    name: "Tasks",
+    description:
+      "**CRUD** plus rich **`GET /`** filters: **`q`**, **`status`** (`pending`, **`missed`**, `completed`), **`listId`**, **`dueOn`**, **`dueDateFrom`/`dueDateTo`**, **`upcomingOnly`**, **`withinDays`**, **`limit`**, **`offset`**. Admin **`GET /`** optional **`userId`**. Dates UTC.",
+  },
   { name: "Flashcard sets", description: "Flashcard sets with nested cards. Nested routes return related collections in `data`." },
   { name: "Flashcards", description: "Single flashcard CRUD; parent set ownership enforced." },
   { name: "Quizzes", description: "Quizzes and questions; same envelope and status conventions as other resources." },
@@ -98,7 +107,7 @@ function buildOpenApi() {
     process.env.SMOKE_BASE_URL ||
     `http://127.0.0.1:${port}`;
 
-  return {
+  const spec = {
     openapi: "3.0.3",
     info: {
       title: "Mishka API",
@@ -107,6 +116,7 @@ function buildOpenApi() {
         "REST API for the Mishka Flutter app (Express + PostgreSQL + Prisma).",
         "",
         "**Envelope:** every JSON body uses `success`, `message`, `message_en`, `message_ar`, `data`, `error`, `details`.",
+        "**Swagger UI:** use the operations filter bar — search **Public**, **Authenticated user**, or **Admin only** (each operation ends with a Scope line you can match).",
         "Send **`Accept-Language`** (e.g. `ar`, `ar-SA`) to influence **`message`** only; **`message_en`** and **`message_ar`** are always present for bilingual UI.",
         "**Arabic:** استخدم **`message_ar`** للنصوص الثابتة في التطبيق؛ **`message`** يعكس اللغة المفضلة عبر الهيدر.",
         "",
@@ -141,6 +151,8 @@ function buildOpenApi() {
     components,
     paths,
   };
+
+  return enrichOpenApiSpec(spec);
 }
 
 module.exports = { buildOpenApi };

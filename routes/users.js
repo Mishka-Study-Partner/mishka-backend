@@ -1,7 +1,7 @@
 ﻿const express = require("express");
 const c = require("../controllers/userController");
 const { validate } = require("../middleware/validateRequest");
-const { updateUserSchema } = require("../validation/schemas");
+const { updateUserSchema, todoListQuerySchema, taskListQuerySchema } = require("../validation/schemas");
 const { requireAdmin, requireSelfOrAdmin } = require("../middleware/authorize");
 
 const router = express.Router();
@@ -11,8 +11,8 @@ const selfOrAdmin = requireSelfOrAdmin("id");
 router.get("/", requireAdmin, c.list);
 router.post("/", requireAdmin, c.create);
 
-router.get("/:id/todo-lists", selfOrAdmin, c.listTodoLists);
-router.get("/:id/tasks", selfOrAdmin, c.listTasks);
+router.get("/:id/todo-lists", selfOrAdmin, validate(todoListQuerySchema, "query"), c.listTodoLists);
+router.get("/:id/tasks", selfOrAdmin, validate(taskListQuerySchema, "query"), c.listTasks);
 router.get("/:id/chat-sessions", selfOrAdmin, c.listChatSessions);
 router.get("/:id/flashcard-sets", selfOrAdmin, c.listFlashcardSets);
 router.get("/:id/quizzes", selfOrAdmin, c.listQuizzes);

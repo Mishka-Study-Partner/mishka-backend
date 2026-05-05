@@ -3,6 +3,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const { createCrudHandlers } = require("../utils/prismaCrud");
 const { assertOwnedOrAdmin, ownedWhere } = require("../utils/authz");
 const { recordDailyStreakActivity } = require("../services/dailyStreakService");
+const { listTasksForUser } = require("../services/taskQueryService");
 
 const crud = createCrudHandlers("todoList", {
   include: { icon: true },
@@ -10,10 +11,18 @@ const crud = createCrudHandlers("todoList", {
 });
 
 exports.list = asyncHandler(async (req, res) => {
+  const { q, listType, limit, offset } = req.query;
+  const where = ownedWhere(req);
+  if (listType) where.listType = listType;
+  if (q && String(q).length) {
+    where.listName = { contains: String(q), mode: "insensitive" };
+  }
   const rows = await prisma.todoList.findMany({
-    where: ownedWhere(req),
+    where,
     orderBy: { updatedAt: "desc" },
     include: { icon: true },
+    skip: offset,
+    take: limit,
   });
   res.apiSuccess(rows, "OK", 200);
 });
@@ -26,10 +35,8 @@ exports.remove = asyncHandler(crud.remove);
 exports.listTasks = asyncHandler(async (req, res) => {
   const list = await prisma.todoList.findUnique({ where: { id: req.params.id } });
   assertOwnedOrAdmin(req, list, "userId");
-  const rows = await prisma.task.findMany({
-    where: { listId: req.params.id },
-    orderBy: { dueDate: "asc" },
-  });
+  const { listId: _ignore, ...filters } = req.query;
+  const rows = await listTasksForUser(list.userId, { ...filters, listId: req.params.id });
   res.apiSuccess(rows, "OK", 200);
 });
 

@@ -5,6 +5,7 @@ const { notFound, badRequest } = require("../utils/httpError");
 const { requireFields } = require("../utils/validate");
 const { isAdmin } = require("../utils/authz");
 const { allocateUsername } = require("../utils/generateUsername");
+const { listTasksForUser } = require("../services/taskQueryService");
 
 const SALT_ROUNDS = 10;
 
@@ -132,19 +133,25 @@ exports.remove = asyncHandler(async (req, res) => {
 });
 
 exports.listTodoLists = asyncHandler(async (req, res) => {
+  const { q, listType, limit, offset } = req.query;
+  const where = { userId: req.params.id };
+  if (listType) where.listType = listType;
+  if (q && String(q).length) {
+    where.listName = { contains: String(q), mode: "insensitive" };
+  }
   const lists = await prisma.todoList.findMany({
-    where: { userId: req.params.id },
+    where,
     orderBy: { updatedAt: "desc" },
     include: { icon: true },
+    skip: offset,
+    take: limit,
   });
   res.apiSuccess(lists, "OK", 200);
 });
 
 exports.listTasks = asyncHandler(async (req, res) => {
-  const tasks = await prisma.task.findMany({
-    where: { userId: req.params.id },
-    orderBy: { dueDate: "asc" },
-  });
+  const { userId: _ignore, ...filters } = req.query;
+  const tasks = await listTasksForUser(req.params.id, filters);
   res.apiSuccess(tasks, "OK", 200);
 });
 

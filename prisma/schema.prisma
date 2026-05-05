@@ -33,6 +33,7 @@ enum StreakRecordStatus {
 enum TaskStatus {
   pending
   completed
+  missed
 }
 
 enum TaskPriority {

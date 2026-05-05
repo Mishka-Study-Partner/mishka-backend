@@ -25,7 +25,24 @@ function setupSwagger(app) {
         docExpansion: "list",
         filter: true,
         tryItOutEnabled: true,
+        tagsSorter: "alpha",
+        operationsSorter: "alpha",
       },
+      customCss: `
+.swagger-ui .markdown strong {
+  font-weight: 500 !important;
+  color: #556478 !important;
+  background: transparent !important;
+}
+.swagger-ui .markdown code {
+  font-weight: normal !important;
+  color: #384452 !important;
+  background-color: #eef2f6 !important;
+}
+.swagger-ui .filter .operation-filter-input {
+  border-radius: 6px;
+}
+`,
     })
   );
 }

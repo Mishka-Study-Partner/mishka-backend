@@ -8,6 +8,125 @@ const bearer = [{ bearerAuth: [] }];
 const studyI18n =
   "**Localization:** Every response uses the global envelope (`success`, `message`, `message_en`, `message_ar`, `data`, `error`, `details`). Send **`Accept-Language: ar`** (or regional variants) so **`message`** prefers Arabic; Flutter should prefer **`message_en` / `message_ar`** for consistent UI copy. **توطين:** الحقول **`message_en`** و **`message_ar`** دائمة؛ الهيدر **`Accept-Language`** يغيّر **`message`** فقط.";
 
+const todoListQueryParams = [
+  ...lang,
+  {
+    name: "q",
+    in: "query",
+    required: false,
+    schema: { type: "string" },
+    description: "Substring match on **`listName`** (case-insensitive).",
+  },
+  {
+    name: "listType",
+    in: "query",
+    required: false,
+    schema: { type: "string", enum: ["calendar", "college", "work", "personal"] },
+    description: "Filter by catalog list kind.",
+  },
+  {
+    name: "limit",
+    in: "query",
+    required: false,
+    schema: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+    description: "Max rows (default **50**, max **100**).",
+  },
+  {
+    name: "offset",
+    in: "query",
+    required: false,
+    schema: { type: "integer", minimum: 0, default: 0 },
+    description: "Pagination skip.",
+  },
+];
+
+const taskListQueryParamsAdminUser = {
+  name: "userId",
+  in: "query",
+  required: false,
+  schema: { type: "string", format: "uuid" },
+  description:
+    "**Admin only** on **`GET /tasks`**. Restrict results to one owner; omit to search across **all** users’ tasks (heavy). Ignored for non-admins.",
+};
+
+const taskListQueryParamsCore = [
+  {
+    name: "q",
+    in: "query",
+    required: false,
+    schema: { type: "string" },
+    description: "Search **`title`** or **`description`** (case-insensitive).",
+  },
+  {
+    name: "status",
+    in: "query",
+    required: false,
+    schema: { type: "string", example: "pending,missed" },
+    description: "Comma-separated: **`pending`**, **`completed`**, **`missed`**.",
+  },
+  {
+    name: "listId",
+    in: "query",
+    required: false,
+    schema: { type: "string", format: "uuid" },
+    description: "Only tasks in this list. **Ignored** when calling **`GET /todo-lists/{id}/tasks`** (path id wins).",
+  },
+  {
+    name: "dueDateFrom",
+    in: "query",
+    required: false,
+    schema: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+    description: "Inclusive UTC date lower bound (`dueDate` column).",
+  },
+  {
+    name: "dueDateTo",
+    in: "query",
+    required: false,
+    schema: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+    description: "Inclusive UTC date upper bound (`dueDate` column).",
+  },
+  {
+    name: "dueOn",
+    in: "query",
+    required: false,
+    schema: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+    description: "Calendar shortcut: tasks due on this **UTC day**. Mutually exclusive with **`dueDateFrom`/`dueDateTo`**.",
+  },
+  {
+    name: "upcomingOnly",
+    in: "query",
+    required: false,
+    schema: { type: "string", enum: ["true", "false"], default: "false" },
+    description:
+      "When **`true`**: **`pending`** only and combined due instant (**`dueDate` + `dueTime`**, UTC) **≥ now**. Good for home/deadlines widgets.",
+  },
+  {
+    name: "withinDays",
+    in: "query",
+    required: false,
+    schema: { type: "integer", minimum: 0, maximum: 366 },
+    description:
+      "Restrict to due instant between **start of today UTC** and **end of today+N UTC**. Combine with **`upcomingOnly`** for “next N days” deadlines.",
+  },
+  {
+    name: "limit",
+    in: "query",
+    required: false,
+    schema: { type: "integer", minimum: 1, maximum: 200, default: 100 },
+    description: "Page size after filters.",
+  },
+  {
+    name: "offset",
+    in: "query",
+    required: false,
+    schema: { type: "integer", minimum: 0, default: 0 },
+    description: "Pagination skip after filters.",
+  },
+];
+
+const taskListQueryParamsScoped = [...lang, ...taskListQueryParamsCore];
+const taskListQueryParamsGlobal = [...lang, taskListQueryParamsAdminUser, ...taskListQueryParamsCore];
+
 /**
  * Default response set for authenticated CRUD routes.
  * **401** / **403** apply only when `security: bearer` is set on the operation.
@@ -377,7 +496,9 @@ const paths = {
     get: {
       tags: ["Users"],
       summary: "List todo lists for user (self or admin)",
-      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      description:
+        "Supports **`q`** (search **listName**), **`listType`**, **`limit`**, **`offset`**. Same filters as **`GET /todo-lists`**.",
+      parameters: [...todoListQueryParams, { $ref: "#/components/parameters/IdUuid" }],
       security: bearer,
       responses: std(),
     },
@@ -386,7 +507,9 @@ const paths = {
     get: {
       tags: ["Users"],
       summary: "List tasks for user (self or admin)",
-      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      description:
+        "Same query params as **`GET /tasks`** except **`userId`** (owner comes from path). **`status`** includes **`missed`**. Dates interpreted in **UTC**.",
+      parameters: [...taskListQueryParamsScoped, { $ref: "#/components/parameters/IdUuid" }],
       security: bearer,
       responses: std(),
     },
@@ -1107,7 +1230,9 @@ const paths = {
     get: {
       tags: ["Todo lists"],
       summary: "List todo lists (scoped to JWT user unless admin)",
-      parameters: lang,
+      description:
+        "**Search:** optional **`q`** on **listName**. **Filter:** **`listType`** (`calendar` | `college` | `work` | `personal`). **Pagination:** **`limit`** (default 50), **`offset`**.",
+      parameters: todoListQueryParams,
       security: bearer,
       responses: std(),
     },
@@ -1148,7 +1273,9 @@ const paths = {
     get: {
       tags: ["Todo lists"],
       summary: "List tasks in list",
-      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      description:
+        "Same filters as **`GET /tasks`**; **`listId`** query param is ignored — path **`id`** is always used.",
+      parameters: [...taskListQueryParamsScoped, { $ref: "#/components/parameters/IdUuid" }],
       security: bearer,
       responses: std(),
     },
@@ -1165,8 +1292,10 @@ const paths = {
   "/tasks": {
     get: {
       tags: ["Tasks"],
-      summary: "List tasks (scoped)",
-      parameters: lang,
+      summary: "List tasks (scoped + search + calendar / upcoming filters)",
+      description:
+        "**`status`:** `pending` \| `completed` \| **`missed`** (comma-separated allowed). **`dueOn`** = single UTC calendar day; **`dueDateFrom`/`dueDateTo`** = inclusive date range — do not mix with **`dueOn`**. **`upcomingOnly=true`** ⇒ pending tasks whose due instant (**date + time**, UTC) is still in the future. **`withinDays`** ⇒ due instant from start of **today UTC** through end of **today+N UTC**. Combine **`upcomingOnly`** + **`withinDays`** + **`limit`** (e.g. **10**) for home-screen deadlines. **`userId`** query: **admins only** to scope another user; omit for all users.",
+      parameters: taskListQueryParamsGlobal,
       security: bearer,
       responses: std(),
     },

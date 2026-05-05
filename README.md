@@ -145,6 +145,18 @@ Base path **`/study-with-mishka`** (JWT). **`concentration`** and **`call_with_m
 
 Legacy **`/study-sessions`** calendar CRUD has been **removed** (table dropped via migration); use Study With Mishka sessions only.
 
+## Todo lists & tasks
+
+Base paths **`/todo-lists`** and **`/tasks`** (JWT); also **`GET /users/:id/todo-lists`** and **`GET /users/:id/tasks`** when **`id`** is you or you’re admin.
+
+**Lists:** **`listName`**, **`listType`** (`calendar` \| `college` \| `work` \| `personal`), optional **`iconId`** (catalog **`/icons`**). Nested **`GET/POST /todo-lists/:id/tasks`**.
+
+**Tasks:** **`listId`**, **`title`**, optional **`description`**, **`dueDate`** + **`dueTime`** (UTC calendar semantics on the wire), **`status`**: **`pending`**, **`completed`**, **`missed`** — set **`missed`** via **`PUT /tasks/:id`** when something is overdue (or keep **`pending`** and derive UX client-side).
+
+**List lists — query:** **`q`** (search **`listName`**), **`listType`**, **`limit`**, **`offset`**.
+
+**List tasks — query:** **`q`** (search **`title`** / **`description`**), **`status`** (comma-separated), **`listId`**, **`dueOn`** (`YYYY-MM-DD` UTC day), **`dueDateFrom`** / **`dueDateTo`**, **`upcomingOnly=true`** (pending + due instant ≥ now), **`withinDays`** (due instant from start of **today UTC** through end of **today+N UTC**), **`limit`**, **`offset`**. Example home widget: **`GET /tasks?upcomingOnly=true&withinDays=7&limit=10`**. Admins on **`GET /tasks`** may pass **`userId`** or omit it to scan all users.
+
 ## Communities (v2)
 
 - **Create** (`POST /communities`) — you become **owner**; set `visibility`: **`public`** (anyone can join with `communityId`) or **`private`** (invite-only). Optional `name`, `description`, `imageUrl`, `category`.
