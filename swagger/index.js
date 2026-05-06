@@ -1,4 +1,3 @@
-const SwaggerUIBundle = require("swagger-ui-dist/swagger-ui-bundle.js");
 const swaggerUi = require("swagger-ui-express");
 const { buildOpenApi } = require("./openapi");
 const { mishkaOpsFilterPlugin } = require("./swaggerFilterPlugin");
@@ -29,7 +28,10 @@ function setupSwagger(app) {
         tryItOutEnabled: true,
         tagsSorter: "alpha",
         operationsSorter: "alpha",
-        plugins: [SwaggerUIBundle.plugins.DownloadUrl, mishkaOpsFilterPlugin],
+        // Do not pass SwaggerUIBundle.plugins.DownloadUrl from Node: swagger-ui-express
+        // inlines functions into swagger-ui-init.js, and DownloadUrl references bundle
+        // internals (e.g. lt) that only exist when the fn runs inside swagger-ui-bundle.
+        plugins: [mishkaOpsFilterPlugin],
       },
       customCss: `
 .swagger-ui .markdown strong {
