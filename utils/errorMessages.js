@@ -70,6 +70,10 @@ const ERROR_MESSAGES = {
     en: "Failed to create signup verification",
     ar: "فشل إنشاء رمز التحقق من التسجيل",
   },
+  SIGNUP_OTP_STORAGE_NOT_READY: {
+    en: "Signup OTP storage is not ready",
+    ar: "خدمة تخزين رمز التحقق غير جاهزة",
+  },
   AUTH_EMAIL_IN_USE: {
     en: "This email is already registered",
     ar: "هذا البريد الإلكتروني مسجل مسبقاً",

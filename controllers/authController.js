@@ -144,6 +144,15 @@ exports.sendSignupOtp = asyncHandler(async (req, res) => {
   const body = req.body;
   const showCode = process.env.RETURN_SIGNUP_OTP_IN_RESPONSE === "true";
   try {
+    if (!prisma.signupVerification || typeof prisma.signupVerification.create !== "function") {
+      throw new HttpError(
+        503,
+        "Signup OTP storage is not ready",
+        { step: "signupVerification.delegate" },
+        "SIGNUP_OTP_STORAGE_NOT_READY"
+      );
+    }
+
     if (body.email) {
       const existing = await prisma.user.findUnique({ where: { email: body.email } });
       if (existing) {
@@ -195,9 +204,19 @@ exports.sendSignupOtp = asyncHandler(async (req, res) => {
     return res.apiSuccess(data, "OK", 200);
   } catch (err) {
     if (err instanceof HttpError) throw err;
+    const lowMessage = String(err?.message || "").toLowerCase();
+    const failureHint = lowMessage.includes("does not exist")
+      ? "MISSING_TABLE_OR_COLUMN"
+      : lowMessage.includes("unknown arg")
+        ? "OUTDATED_PRISMA_CLIENT"
+        : lowMessage.includes("null constraint")
+          ? "DB_NOT_NULL_CONSTRAINT"
+          : "UNKNOWN";
     console.error("[auth.sendSignupOtp] failed", {
       channel: body.email ? "email" : "phone",
       prismaCode: err?.code || null,
+      errorName: err?.name || null,
+      failureHint,
       message: err?.message || "Unknown error",
     });
     throw new HttpError(
@@ -206,6 +225,11 @@ exports.sendSignupOtp = asyncHandler(async (req, res) => {
       {
         step: "signupVerification.create",
         prismaCode: err?.code || null,
+        errorName: err?.name || null,
+        failureHint,
+        ...(process.env.NODE_ENV === "development" && err?.message
+          ? { developerMessage: err.message }
+          : {}),
       },
       "SIGNUP_OTP_SEND_FAILED"
     );
