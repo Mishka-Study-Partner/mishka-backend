@@ -2642,7 +2642,8 @@ const paths = {
     get: {
       tags: ["Saved library"],
       summary: "List saved quizzes",
-      description: "Quizzes owned by the user with `savedAt` set, ordered by `savedAt` descending.",
+      description:
+        "Quizzes owned by the user with `savedAt` set, ordered by `savedAt` descending. Use **`GET /saved-quizzes/{id}`** with each item’s **`id`** for a dedicated detail payload (includes `questions`).",
       parameters: lang,
       security: bearer,
       responses: std(),
@@ -2670,6 +2671,15 @@ const paths = {
     },
   },
   "/saved-quizzes/{id}": {
+    get: {
+      tags: ["Saved library"],
+      summary: "Get one saved quiz (detail screen)",
+      description:
+        "**`id`** is the **quiz id** — the same **`id`** returned by `GET /saved-quizzes`. Returns the full quiz plus `questions` with non-null `savedAt`. **404** `QUIZ_NOT_FOUND` if the quiz row does not exist. **404** `SAVED_LIBRARY_NOT_SAVED` if you own the quiz but `savedAt` is null. Another user’s quiz returns **404** `NOT_FOUND` (same stealth as other ownership checks).",
+      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      security: bearer,
+      responses: std({ 200: R.SavedLibraryQuiz200Ok, 404: R.NotFound }),
+    },
     delete: {
       tags: ["Saved library"],
       summary: "Remove quiz from saved library",
@@ -2695,7 +2705,8 @@ const paths = {
     get: {
       tags: ["Saved library"],
       summary: "List saved flashcard sets",
-      description: "Sets owned by the user with `savedAt` set, ordered by `savedAt` descending.",
+      description:
+        "Sets owned by the user with `savedAt` set, ordered by `savedAt` descending. Detail: **`GET /saved-flashcard-sets/{id}`** (`id` = set id from list).",
       parameters: lang,
       security: bearer,
       responses: std(),
@@ -2723,6 +2734,15 @@ const paths = {
     },
   },
   "/saved-flashcard-sets/{id}": {
+    get: {
+      tags: ["Saved library"],
+      summary: "Get one saved flashcard set (detail screen)",
+      description:
+        "**`id`** is the **flashcard set id** from `GET /saved-flashcard-sets`. Full set + `flashcards`, non-null `savedAt`. Errors: **404** `FLASHCARD_SET_NOT_FOUND`, **404** `SAVED_LIBRARY_NOT_SAVED`, or **404** `NOT_FOUND` for other users’ sets.",
+      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      security: bearer,
+      responses: std({ 200: R.SavedLibraryFlashcardSet200Ok, 404: R.NotFound }),
+    },
     delete: {
       tags: ["Saved library"],
       summary: "Remove flashcard set from saved library",
@@ -2749,7 +2769,8 @@ const paths = {
     get: {
       tags: ["Saved library"],
       summary: "List saved summaries",
-      description: "Summaries owned by the user with `savedAt` set, ordered by `savedAt` descending.",
+      description:
+        "Summaries owned by the user with `savedAt` set, ordered by `savedAt` descending. Detail: **`GET /saved-summaries/{id}`**.",
       parameters: lang,
       security: bearer,
       responses: std(),
@@ -2777,6 +2798,15 @@ const paths = {
     },
   },
   "/saved-summaries/{id}": {
+    get: {
+      tags: ["Saved library"],
+      summary: "Get one saved summary (detail screen)",
+      description:
+        "**`id`** is the **summary id** from `GET /saved-summaries`. **404** `SUMMARY_NOT_FOUND`, **404** `SAVED_LIBRARY_NOT_SAVED`, or **404** `NOT_FOUND` for other users.",
+      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      security: bearer,
+      responses: std({ 200: R.SavedLibrarySummary200Ok, 404: R.NotFound }),
+    },
     delete: {
       tags: ["Saved library"],
       summary: "Remove summary from saved library",
@@ -2801,7 +2831,8 @@ const paths = {
     get: {
       tags: ["Saved library"],
       summary: "List saved mind maps",
-      description: "Mind maps owned by the user with `savedAt` set, ordered by `savedAt` descending.",
+      description:
+        "Mind maps owned by the user with `savedAt` set, ordered by `savedAt` descending. Detail: **`GET /saved-mind-maps/{id}`**.",
       parameters: lang,
       security: bearer,
       responses: std(),
@@ -2829,6 +2860,15 @@ const paths = {
     },
   },
   "/saved-mind-maps/{id}": {
+    get: {
+      tags: ["Saved library"],
+      summary: "Get one saved mind map (detail screen)",
+      description:
+        "**`id`** is the **mind map id** from `GET /saved-mind-maps`. **404** `MIND_MAP_NOT_FOUND`, **404** `SAVED_LIBRARY_NOT_SAVED`, or **404** `NOT_FOUND` for other users.",
+      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      security: bearer,
+      responses: std({ 200: R.SavedLibraryMindMap200Ok, 404: R.NotFound }),
+    },
     delete: {
       tags: ["Saved library"],
       summary: "Remove mind map from saved library",

@@ -288,6 +288,30 @@ const StudyCheckInCreated201Ok = successEnvelope(
   { id: Ex.UUID, sessionId: Ex.UUID, kind: "mood_scale_10", responseInt: 7, createdAt: "2026-05-05T12:06:00.000Z" }
 );
 
+const SavedLibraryQuiz200Ok = successEnvelope(
+  "200 OK",
+  "Full quiz with `questions`; `savedAt` is set. Path `id` is the quiz id (same as list item `id`).",
+  Ex.savedQuizDetailExample
+);
+
+const SavedLibraryFlashcardSet200Ok = successEnvelope(
+  "200 OK",
+  "Full flashcard set with `flashcards`; `savedAt` is set. Path `id` is the set id.",
+  Ex.savedFlashcardSetDetailExample
+);
+
+const SavedLibrarySummary200Ok = successEnvelope(
+  "200 OK",
+  "Full summary row; `savedAt` is set. Path `id` is the summary id.",
+  Ex.savedSummaryDetailExample
+);
+
+const SavedLibraryMindMap200Ok = successEnvelope(
+  "200 OK",
+  "Full mind map row (`content` JSON); `savedAt` is set. Path `id` is the mind map id.",
+  Ex.savedMindMapDetailExample
+);
+
 module.exports = {
   OkEnvelope,
   CreatedEnvelope,
@@ -325,4 +349,9 @@ module.exports = {
   StudyTelemetry200Ok,
   StudyMlReportCreated201Ok,
   StudyCheckInCreated201Ok,
+
+  SavedLibraryQuiz200Ok,
+  SavedLibraryFlashcardSet200Ok,
+  SavedLibrarySummary200Ok,
+  SavedLibraryMindMap200Ok,
 };

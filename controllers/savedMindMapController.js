@@ -2,7 +2,7 @@ const prisma = require("../utils/prisma");
 const asyncHandler = require("../utils/asyncHandler");
 const { assertOwnedOrAdmin, ownedWhere } = require("../utils/authz");
 const { recordDailyStreakActivity } = require("../services/dailyStreakService");
-const { notFound, badRequest } = require("../utils/httpError");
+const { HttpError, notFound, badRequest } = require("../utils/httpError");
 const { viewerHasSharedAccess } = require("../services/sharedMaterialAccess");
 const { createMaterialSharesBatch } = require("../services/materialShareService");
 
@@ -16,6 +16,22 @@ exports.list = asyncHandler(async (req, res) => {
     orderBy: { savedAt: "desc" },
   });
   res.apiSuccess(rows, "OK", 200);
+});
+
+/** `id` is the mind map id (same as list items). */
+exports.get = asyncHandler(async (req, res) => {
+  const mindMap = await prisma.mindMap.findUnique({ where: { id: req.params.id } });
+  if (!mindMap) throw notFound("Mind map not found", "MIND_MAP_NOT_FOUND");
+  assertOwnedOrAdmin(req, mindMap, "userId");
+  if (mindMap.savedAt == null) {
+    throw new HttpError(
+      404,
+      "Mind map is not in your saved library",
+      { mindMapId: mindMap.id },
+      "SAVED_LIBRARY_NOT_SAVED"
+    );
+  }
+  res.apiSuccess(mindMap, "OK", 200);
 });
 
 exports.add = asyncHandler(async (req, res) => {

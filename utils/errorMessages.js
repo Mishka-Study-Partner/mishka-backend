@@ -82,6 +82,26 @@ const ERROR_MESSAGES = {
     en: "This phone number is already registered",
     ar: "رقم الهاتف مسجل مسبقاً",
   },
+  SAVED_LIBRARY_NOT_SAVED: {
+    en: "This item is not in your saved library",
+    ar: "هذا العنصر غير موجود في مكتبتك المحفوظة",
+  },
+  QUIZ_NOT_FOUND: {
+    en: "Quiz not found",
+    ar: "الاختبار غير موجود",
+  },
+  FLASHCARD_SET_NOT_FOUND: {
+    en: "Flashcard set not found",
+    ar: "مجموعة البطاقات غير موجودة",
+  },
+  SUMMARY_NOT_FOUND: {
+    en: "Summary not found",
+    ar: "الملخص غير موجود",
+  },
+  MIND_MAP_NOT_FOUND: {
+    en: "Mind map not found",
+    ar: "الخريطة الذهنية غير موجودة",
+  },
   AUTH_OAUTH_EMAIL_CONFLICT: {
     en: "This email is linked to another sign-in method",
     ar: "هذا البريد مرتبط بطريقة تسجيل أخرى",

@@ -2,7 +2,7 @@ const prisma = require("../utils/prisma");
 const asyncHandler = require("../utils/asyncHandler");
 const { assertOwnedOrAdmin, ownedWhere } = require("../utils/authz");
 const { recordDailyStreakActivity } = require("../services/dailyStreakService");
-const { notFound, badRequest } = require("../utils/httpError");
+const { HttpError, notFound, badRequest } = require("../utils/httpError");
 const { viewerHasSharedAccess } = require("../services/sharedMaterialAccess");
 const { createMaterialSharesBatch } = require("../services/materialShareService");
 
@@ -13,6 +13,25 @@ exports.list = asyncHandler(async (req, res) => {
     include: { flashcards: true },
   });
   res.apiSuccess(rows, "OK", 200);
+});
+
+/** `id` is the flashcard set id (same as list items). */
+exports.get = asyncHandler(async (req, res) => {
+  const set = await prisma.flashcardSet.findUnique({
+    where: { id: req.params.id },
+    include: { flashcards: true },
+  });
+  if (!set) throw notFound("Flashcard set not found", "FLASHCARD_SET_NOT_FOUND");
+  assertOwnedOrAdmin(req, set, "userId");
+  if (set.savedAt == null) {
+    throw new HttpError(
+      404,
+      "Flashcard set is not in your saved library",
+      { flashcardSetId: set.id },
+      "SAVED_LIBRARY_NOT_SAVED"
+    );
+  }
+  res.apiSuccess(set, "OK", 200);
 });
 
 exports.add = asyncHandler(async (req, res) => {

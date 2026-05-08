@@ -102,6 +102,75 @@ const listExample = [
   { id: UUID2, title: "Review notes", sortOrder: 1 },
 ];
 
+/** `GET /saved-quizzes/{id}` — same shape as list rows; `id` path param is this quiz `id`. */
+const savedQuizDetailExample = {
+  id: UUID,
+  userId: UUID,
+  title: "Cell biology quick check",
+  sourceType: "tutor",
+  sourceReference: null,
+  chatSessionId: UUID2,
+  savedAt: "2026-05-08T10:00:00.000Z",
+  totalQuestions: 1,
+  createdAt: "2026-05-08T09:00:00.000Z",
+  questions: [
+    {
+      id: "9b2c4e10-9d3a-4f1e-bc7a-1a2b3c4d5e7a",
+      quizId: UUID,
+      questionText: "Primary energy currency of the cell?",
+      optionA: "ATP",
+      optionB: "DNA",
+      optionC: "Glucose",
+      optionD: "RNA",
+      correctOption: "A",
+      createdAt: "2026-05-08T09:00:00.000Z",
+    },
+  ],
+};
+
+const savedFlashcardSetDetailExample = {
+  id: UUID,
+  userId: UUID,
+  title: "Latin roots",
+  sourceType: "tutor",
+  sourceReference: null,
+  chatSessionId: UUID2,
+  savedAt: "2026-05-08T10:00:00.000Z",
+  createdAt: "2026-05-08T09:00:00.000Z",
+  flashcards: [
+    {
+      id: "ab2c4e10-9d3a-4f1e-bc7a-1a2b3c4d5e7b",
+      setId: UUID,
+      question: "Meaning of *aqua*?",
+      answer: "Water",
+      createdAt: "2026-05-08T09:00:00.000Z",
+    },
+  ],
+};
+
+const savedSummaryDetailExample = {
+  id: UUID,
+  userId: UUID,
+  sourceType: "tutor",
+  sourceReference: null,
+  summaryText: "Chapter 3 recap: photosynthesis converts light to chemical energy…",
+  chatSessionId: UUID2,
+  savedAt: "2026-05-08T10:00:00.000Z",
+  createdAt: "2026-05-08T09:00:00.000Z",
+};
+
+const savedMindMapDetailExample = {
+  id: UUID,
+  userId: UUID,
+  title: "Exam topics",
+  content: { root: { label: "Biology", children: [{ label: "Cells" }, { label: "Genetics" }] } },
+  sourceType: "tutor",
+  sourceReference: null,
+  chatSessionId: UUID2,
+  savedAt: "2026-05-08T10:00:00.000Z",
+  createdAt: "2026-05-08T09:00:00.000Z",
+};
+
 module.exports = {
   UUID,
   UUID2,
@@ -115,6 +184,10 @@ module.exports = {
   aiChatRequestExample,
   aiGenerateToolsRequestExample,
   listExample,
+  savedQuizDetailExample,
+  savedFlashcardSetDetailExample,
+  savedSummaryDetailExample,
+  savedMindMapDetailExample,
   rootData: {
     name: "Mishka API",
     status: "ok",

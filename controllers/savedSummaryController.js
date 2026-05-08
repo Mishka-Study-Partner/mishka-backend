@@ -2,7 +2,7 @@ const prisma = require("../utils/prisma");
 const asyncHandler = require("../utils/asyncHandler");
 const { assertOwnedOrAdmin, ownedWhere } = require("../utils/authz");
 const { recordDailyStreakActivity } = require("../services/dailyStreakService");
-const { notFound, badRequest } = require("../utils/httpError");
+const { HttpError, notFound, badRequest } = require("../utils/httpError");
 const { viewerHasSharedAccess } = require("../services/sharedMaterialAccess");
 const { createMaterialSharesBatch } = require("../services/materialShareService");
 
@@ -12,6 +12,22 @@ exports.list = asyncHandler(async (req, res) => {
     orderBy: { savedAt: "desc" },
   });
   res.apiSuccess(rows, "OK", 200);
+});
+
+/** `id` is the summary id (same as list items). */
+exports.get = asyncHandler(async (req, res) => {
+  const summary = await prisma.summary.findUnique({ where: { id: req.params.id } });
+  if (!summary) throw notFound("Summary not found", "SUMMARY_NOT_FOUND");
+  assertOwnedOrAdmin(req, summary, "userId");
+  if (summary.savedAt == null) {
+    throw new HttpError(
+      404,
+      "Summary is not in your saved library",
+      { summaryId: summary.id },
+      "SAVED_LIBRARY_NOT_SAVED"
+    );
+  }
+  res.apiSuccess(summary, "OK", 200);
 });
 
 exports.add = asyncHandler(async (req, res) => {

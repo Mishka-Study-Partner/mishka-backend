@@ -12,6 +12,7 @@ const router = express.Router();
 router.get("/", c.list);
 router.post("/import-shared", validate(savedFlashcardSetImportFromSharedSchema), c.importFromShared);
 router.post("/", validate(savedFlashcardSetAddSchema), c.add);
+router.get("/:id", c.get);
 router.delete("/:id", c.remove);
 router.post("/:id/share", validate(savedMaterialShareToChannelsSchema), c.share);
 
