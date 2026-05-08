@@ -205,7 +205,10 @@ exports.sendSignupOtp = asyncHandler(async (req, res) => {
   } catch (err) {
     if (err instanceof HttpError) throw err;
     const lowMessage = String(err?.message || "").toLowerCase();
-    const failureHint = lowMessage.includes("does not exist")
+    const errorName = String(err?.name || "");
+    const failureHint = errorName === "PrismaClientInitializationError"
+      ? "PRISMA_INIT_OR_DB_UNREACHABLE"
+      : lowMessage.includes("does not exist")
       ? "MISSING_TABLE_OR_COLUMN"
       : lowMessage.includes("unknown arg")
         ? "OUTDATED_PRISMA_CLIENT"
@@ -215,7 +218,7 @@ exports.sendSignupOtp = asyncHandler(async (req, res) => {
     console.error("[auth.sendSignupOtp] failed", {
       channel: body.email ? "email" : "phone",
       prismaCode: err?.code || null,
-      errorName: err?.name || null,
+      errorName: errorName || null,
       failureHint,
       message: err?.message || "Unknown error",
     });
@@ -225,10 +228,10 @@ exports.sendSignupOtp = asyncHandler(async (req, res) => {
       {
         step: "signupVerification.create",
         prismaCode: err?.code || null,
-        errorName: err?.name || null,
+        errorName: errorName || null,
         failureHint,
-        ...(process.env.NODE_ENV === "development" && err?.message
-          ? { developerMessage: err.message }
+        ...(process.env.NODE_ENV === "development"
+          ? { developerMessage: err?.message || String(err) }
           : {}),
       },
       "SIGNUP_OTP_SEND_FAILED"
