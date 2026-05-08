@@ -22,7 +22,7 @@ const registerSchema = z
     provider: z.string().max(20).optional(),
     providerId: z.string().max(100).optional(),
     signupOtp: z.string().min(4).max(10).optional(),
-    educationStatus: z.enum(["school", "university", "other"]),
+    educationStatus: z.enum(["school", "university", "other"]).optional(),
     educationOtherDetail: z.string().max(500).optional(),
     schoolTrack: z.enum(["middle_school", "high_school"]).optional(),
     schoolGrade: z.coerce.number().int().min(1).max(3).optional(),
@@ -148,17 +148,53 @@ const forgotPasswordSchema = z
 
 const resetPasswordSchema = z
   .object({
-    userId: z.string().uuid(),
+    userId: z.string().uuid().optional(),
+    email: z.string().email().max(150).optional(),
+    phoneNumber: z.string().max(20).optional(),
+    countryCode: z.string().max(5).optional(),
     resetCode: z.string().min(4).max(10),
     newPassword: passwordPolicy,
   })
-  .strict();
+  .strict()
+  .superRefine((v, ctx) => {
+    if (!v.userId && !v.email && !v.phoneNumber) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Provide userId or (email/phoneNumber) with resetCode",
+        path: ["userId"],
+      });
+    }
+    if (v.email && v.phoneNumber) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Send only email or phoneNumber, not both",
+        path: ["email"],
+      });
+    }
+  });
 
 const sendSignupOtpSchema = z
   .object({
     email: z.string().email().max(150).optional(),
     phoneNumber: z.string().min(5).max(20).optional(),
     countryCode: z.string().max(5).optional(),
+  })
+  .strict()
+  .refine((v) => Boolean(v.email || v.phoneNumber), {
+    message: "Either email or phoneNumber is required",
+    path: ["email"],
+  })
+  .refine((v) => !(v.email && v.phoneNumber), {
+    message: "Send only email or phoneNumber, not both",
+    path: ["email"],
+  });
+
+const verifySignupOtpSchema = z
+  .object({
+    email: z.string().email().max(150).optional(),
+    phoneNumber: z.string().min(5).max(20).optional(),
+    countryCode: z.string().max(5).optional(),
+    signupOtp: z.string().min(4).max(10),
   })
   .strict()
   .refine((v) => Boolean(v.email || v.phoneNumber), {
@@ -761,6 +797,7 @@ module.exports = {
   forgotPasswordSchema,
   resetPasswordSchema,
   sendSignupOtpSchema,
+  verifySignupOtpSchema,
   oauthGoogleSchema,
   oauthAppleSchema,
   oauthFacebookSchema,

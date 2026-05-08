@@ -134,7 +134,7 @@ function buildOpenApi() {
         "Most operations document these via the **Responses** section; examples show sample envelopes.",
         "",
         "**Auth:** most routes need `Authorization: Bearer <accessToken>` from `/auth/login` or `/auth/register`.",
-        "Exceptions: `GET /`, `/openapi.json`, `/api-docs`, `/auth/send-signup-otp`, `/auth/register`, `/auth/login`, `/auth/forgot-password`, `/auth/reset-password`, `/auth/oauth/google`, `/auth/oauth/apple`, `/auth/oauth/facebook`.",
+        "Exceptions: `GET /`, `/openapi.json`, `/api-docs`, `/auth/send-signup-otp`, `/auth/verify-signup-otp`, `/auth/register`, `/auth/login`, `/auth/forgot-password`, `/auth/reset-password`, `/auth/oauth/google`, `/auth/oauth/apple`, `/auth/oauth/facebook`.",
         "Operations without `security` never return **401** from auth middleware; **401** still applies to wrong password on `POST /auth/login`.",
         "",
         "**Roles:** JWT includes `role` (`student` | `teacher` | `admin`). Admins bypass row-level ownership where the API allows it.",

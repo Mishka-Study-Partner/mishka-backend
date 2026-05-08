@@ -170,6 +170,12 @@ const SendSignupOtp200Ok = successEnvelope(
   { sent: true, channel: "email" }
 );
 
+const VerifySignupOtp200Ok = successEnvelope(
+  "200 OK",
+  "Signup OTP is valid and not consumed/expired.",
+  { verified: true, channel: "email", expiresAt: "2026-05-09T10:00:00.000Z" }
+);
+
 const ForgotPassword200Ok = successEnvelope(
   "200 OK",
   "Always returns `{ sent: true }` even if the email/phone is unknown (no account enumeration).",
@@ -298,6 +304,7 @@ module.exports = {
   AiChat200Ok,
   AiGenerateTools200Ok,
   SendSignupOtp200Ok,
+  VerifySignupOtp200Ok,
   ForgotPassword200Ok,
   ResetPassword200Ok,
   AuthMe200Ok,

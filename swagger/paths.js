@@ -232,12 +232,29 @@ const paths = {
       },
     },
   },
+  "/auth/verify-signup-otp": {
+    post: {
+      tags: ["Auth"],
+      summary: "Verify signup OTP",
+      description:
+        "Checks if `signupOtp` is valid for the provided email/phone and not expired or consumed. Useful for a dedicated verify screen before calling `POST /auth/register`.",
+      parameters: lang,
+      requestBody: jsonBody("#/components/schemas/VerifySignupOtpBody", "", {
+        email: "norhankandil160@gmail.com",
+        signupOtp: "111111",
+      }),
+      responses: {
+        ...std(),
+        200: R.VerifySignupOtp200Ok,
+      },
+    },
+  },
   "/auth/register": {
     post: {
       tags: ["Auth"],
       summary: "Register",
       description:
-        "Password accounts require onboarding answers (`educationStatus`, conditional school/university fields), `phoneNumber`, `agreeTerms: true`, and password policy (8–20 chars, upper, lower, special). When `SIGNUP_OTP_REQUIRED=true`, call `/auth/send-signup-otp` first and send `signupOtp` (or use bypass code `111111` until real delivery). Optional `provider` + `providerId` for reserved manual linking; prefer **`POST /auth/oauth/*`** for Google, Apple, and Facebook.",
+        "Password accounts require `phoneNumber`, `agreeTerms: true`, and password policy (8–20 chars, upper, lower, special). `educationStatus` is optional, but if sent then conditional school/university fields are validated. When `SIGNUP_OTP_REQUIRED=true`, call `/auth/send-signup-otp` first and send `signupOtp` (or use bypass code `111111` until real delivery). Optional `provider` + `providerId` for reserved manual linking; prefer **`POST /auth/oauth/*`** for Google, Apple, and Facebook.",
       parameters: lang,
       requestBody: jsonBody("#/components/schemas/RegisterBody", "", Ex.registerRequestExample),
       responses: (() => {
@@ -304,16 +321,13 @@ const paths = {
     post: {
       tags: ["Auth"],
       summary: "Reset password with code",
-      description: "`newPassword` must satisfy the same policy as registration (8–20 chars, upper, lower, special).",
+      description:
+        "`newPassword` must satisfy the same policy as registration (8–20 chars, upper, lower, special). Identity may be provided as `userId` or `email` or `phoneNumber` + optional `countryCode`.",
       parameters: lang,
       requestBody: jsonBody(
         "#/components/schemas/ResetPasswordBody",
         "",
-        {
-          userId: Ex.UUID,
-          resetCode: "12345",
-          newPassword: "N3w!Strong1",
-        }
+        { email: "norhankandil160@gmail.com", resetCode: "12345", newPassword: "N3w!Strong1" }
       ),
       responses: {
         ...std(),

@@ -8,6 +8,7 @@ const {
   forgotPasswordSchema,
   resetPasswordSchema,
   sendSignupOtpSchema,
+  verifySignupOtpSchema,
   oauthGoogleSchema,
   oauthAppleSchema,
   oauthFacebookSchema,
@@ -16,6 +17,7 @@ const {
 const router = express.Router();
 
 router.post("/send-signup-otp", validate(sendSignupOtpSchema), c.sendSignupOtp);
+router.post("/verify-signup-otp", validate(verifySignupOtpSchema), c.verifySignupOtp);
 router.post("/register", validate(registerSchema), c.register);
 router.post("/login", validate(loginSchema), c.login);
 router.get("/me", requireAuth, c.me);

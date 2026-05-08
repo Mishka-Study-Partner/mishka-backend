@@ -195,6 +195,35 @@ exports.sendSignupOtp = asyncHandler(async (req, res) => {
   return res.apiSuccess(data, "OK", 200);
 });
 
+exports.verifySignupOtp = asyncHandler(async (req, res) => {
+  const body = req.body;
+  const row = await prisma.signupVerification.findFirst({
+    where: {
+      code: body.signupOtp,
+      consumedAt: null,
+      expiresAt: { gt: new Date() },
+      OR: body.email
+        ? [{ email: body.email }]
+        : [{ phoneNumber: body.phoneNumber, countryCode: body.countryCode ?? null }],
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!row) {
+    throw new HttpError(400, "Invalid or expired signup code", undefined, "SIGNUP_OTP_INVALID");
+  }
+
+  return res.apiSuccess(
+    {
+      verified: true,
+      expiresAt: row.expiresAt.toISOString(),
+      channel: row.email ? "email" : "phone",
+    },
+    "OK",
+    200
+  );
+});
+
 exports.register = asyncHandler(async (req, res) => {
   const body = req.body;
   const password = body.password ? await bcrypt.hash(body.password, SALT_ROUNDS) : null;
@@ -373,11 +402,16 @@ exports.forgotPassword = asyncHandler(async (req, res) => {
 });
 
 exports.resetPassword = asyncHandler(async (req, res) => {
-  const { userId, resetCode, newPassword } = req.body;
+  const { userId, email, phoneNumber, countryCode, resetCode, newPassword } = req.body;
+  const identityWhere = userId
+    ? { userId }
+    : email
+      ? { user: { email } }
+      : { user: userWhereForPhone(phoneNumber, countryCode ?? null) };
 
   const token = await prisma.passwordResetToken.findFirst({
     where: {
-      userId,
+      ...identityWhere,
       resetCode,
       isUsed: false,
       expiresAt: { gt: new Date() },
@@ -390,9 +424,10 @@ exports.resetPassword = asyncHandler(async (req, res) => {
   }
 
   const hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  const resolvedUserId = token.userId;
 
   await prisma.$transaction([
-    prisma.user.update({ where: { id: userId }, data: { password: hash } }),
+    prisma.user.update({ where: { id: resolvedUserId }, data: { password: hash } }),
     prisma.passwordResetToken.update({ where: { id: token.id }, data: { isUsed: true } }),
   ]);
 

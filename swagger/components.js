@@ -88,7 +88,7 @@ module.exports = {
     },
     RegisterBody: {
       type: "object",
-      required: ["firstName", "lastName", "email", "agreeTerms", "phoneNumber", "educationStatus"],
+      required: ["firstName", "lastName", "email", "agreeTerms", "phoneNumber"],
       additionalProperties: false,
       properties: {
         firstName: { type: "string", minLength: 1, maxLength: 50 },
@@ -116,7 +116,7 @@ module.exports = {
         educationStatus: {
           type: "string",
           enum: ["school", "university", "other"],
-          description: "Collected after in-app onboarding, before account creation.",
+          description: "Optional. If provided, conditional education fields apply.",
         },
         educationOtherDetail: {
           type: "string",
@@ -148,6 +148,19 @@ module.exports = {
       },
       example: Ex.registerRequestExample,
     },
+    VerifySignupOtpBody: {
+      type: "object",
+      additionalProperties: false,
+      required: ["signupOtp"],
+      properties: {
+        email: { type: "string", format: "email", maxLength: 150 },
+        phoneNumber: { type: "string", minLength: 5, maxLength: 20 },
+        countryCode: { type: "string", maxLength: 5 },
+        signupOtp: { type: "string", minLength: 4, maxLength: 10 },
+      },
+      description: "Verify signup OTP before registration. Provide exactly one of `email` or `phoneNumber`.",
+      example: { email: "norhankandil160@gmail.com", signupOtp: "111111" },
+    },
     LoginBody: {
       type: "object",
       required: ["password"],
@@ -175,14 +188,18 @@ module.exports = {
     },
     ResetPasswordBody: {
       type: "object",
-      required: ["userId", "resetCode", "newPassword"],
+      required: ["resetCode", "newPassword"],
       additionalProperties: false,
       properties: {
-        userId: { type: "string", format: "uuid" },
+        userId: { type: "string", format: "uuid", description: "Optional if using email or phoneNumber." },
+        email: { type: "string", format: "email", maxLength: 150, description: "Optional alternative to userId." },
+        phoneNumber: { type: "string", maxLength: 20, description: "Optional alternative to userId." },
+        countryCode: { type: "string", maxLength: 5, description: "Optional with phoneNumber." },
         resetCode: { type: "string", minLength: 4, maxLength: 10 },
         newPassword: { type: "string", minLength: 8, maxLength: 20, description: "Upper, lower, special character required." },
       },
-      example: { userId: Ex.UUID, resetCode: "12345", newPassword: "N3w!Strong1" },
+      description: "Provide `resetCode` + `newPassword` and one identity: `userId` or `email` or `phoneNumber`.",
+      example: { email: "norhankandil160@gmail.com", resetCode: "12345", newPassword: "N3w!Strong1" },
     },
     OauthGoogleBody: {
       type: "object",
