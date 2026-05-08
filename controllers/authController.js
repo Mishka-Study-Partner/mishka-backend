@@ -197,19 +197,26 @@ exports.sendSignupOtp = asyncHandler(async (req, res) => {
 
 exports.verifySignupOtp = asyncHandler(async (req, res) => {
   const body = req.body;
-  const otpCode = body.signupOtp;
+  if (signupOtpBypassesVerification(body.signupOtp)) {
+    return res.apiSuccess(
+      {
+        verified: true,
+        bypass: true,
+        channel: body.email ? "email" : "phone",
+      },
+      "OK",
+      200
+    );
+  }
+
   const row = await prisma.signupVerification.findFirst({
     where: {
-      code: otpCode,
+      code: body.signupOtp,
       consumedAt: null,
       expiresAt: { gt: new Date() },
-      ...(body.email || body.phoneNumber
-        ? {
-            OR: body.email
-              ? [{ email: body.email }]
-              : [{ phoneNumber: body.phoneNumber, countryCode: body.countryCode ?? null }],
-          }
-        : {}),
+      OR: body.email
+        ? [{ email: body.email }]
+        : [{ phoneNumber: body.phoneNumber, countryCode: body.countryCode ?? null }],
     },
     orderBy: { createdAt: "desc" },
   });
