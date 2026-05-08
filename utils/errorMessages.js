@@ -66,6 +66,10 @@ const ERROR_MESSAGES = {
     en: "Invalid or expired signup verification code",
     ar: "رمز التحقق من التسجيل غير صالح أو منتهي",
   },
+  SIGNUP_OTP_SEND_FAILED: {
+    en: "Failed to create signup verification",
+    ar: "فشل إنشاء رمز التحقق من التسجيل",
+  },
   AUTH_EMAIL_IN_USE: {
     en: "This email is already registered",
     ar: "هذا البريد الإلكتروني مسجل مسبقاً",

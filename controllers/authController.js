@@ -143,56 +143,73 @@ async function assertSignupOtpValid(tx, body) {
 exports.sendSignupOtp = asyncHandler(async (req, res) => {
   const body = req.body;
   const showCode = process.env.RETURN_SIGNUP_OTP_IN_RESPONSE === "true";
-
-  if (body.email) {
-    const existing = await prisma.user.findUnique({ where: { email: body.email } });
-    if (existing) {
-      throw new HttpError(409, "This email is already registered", undefined, "AUTH_EMAIL_IN_USE");
-    }
-    await prisma.signupVerification.updateMany({
-      where: { email: body.email, consumedAt: null },
-      data: { consumedAt: new Date() },
-    });
-  } else {
-    const existing = await prisma.user.findFirst({
-      where: userWhereForPhone(body.phoneNumber, body.countryCode ?? null),
-    });
-    if (existing) {
-      throw new HttpError(409, "This phone number is already registered", undefined, "AUTH_PHONE_IN_USE");
-    }
-    await prisma.signupVerification.updateMany({
-      where: {
-        phoneNumber: body.phoneNumber,
-        countryCode: body.countryCode ?? null,
-        consumedAt: null,
-      },
-      data: { consumedAt: new Date() },
-    });
-  }
-
-  const code = `${Math.floor(100000 + Math.random() * 900000)}`;
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-
-  await prisma.signupVerification.create({
-    data: {
-      email: body.email || null,
-      phoneNumber: body.email ? null : body.phoneNumber,
-      countryCode: body.email ? null : body.countryCode ?? null,
-      code,
-      expiresAt,
-    },
-  });
-
-  const data = showCode
-    ? {
-        sent: true,
-        signupOtp: code,
-        expiresAt: expiresAt.toISOString(),
-        channel: body.email ? "email" : "phone",
+  try {
+    if (body.email) {
+      const existing = await prisma.user.findUnique({ where: { email: body.email } });
+      if (existing) {
+        throw new HttpError(409, "This email is already registered", undefined, "AUTH_EMAIL_IN_USE");
       }
-    : { sent: true, channel: body.email ? "email" : "phone" };
+      await prisma.signupVerification.updateMany({
+        where: { email: body.email, consumedAt: null },
+        data: { consumedAt: new Date() },
+      });
+    } else {
+      const existing = await prisma.user.findFirst({
+        where: userWhereForPhone(body.phoneNumber, body.countryCode ?? null),
+      });
+      if (existing) {
+        throw new HttpError(409, "This phone number is already registered", undefined, "AUTH_PHONE_IN_USE");
+      }
+      await prisma.signupVerification.updateMany({
+        where: {
+          phoneNumber: body.phoneNumber,
+          countryCode: body.countryCode ?? null,
+          consumedAt: null,
+        },
+        data: { consumedAt: new Date() },
+      });
+    }
 
-  return res.apiSuccess(data, "OK", 200);
+    const code = `${Math.floor(100000 + Math.random() * 900000)}`;
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    await prisma.signupVerification.create({
+      data: {
+        email: body.email || null,
+        phoneNumber: body.email ? null : body.phoneNumber,
+        countryCode: body.email ? null : body.countryCode ?? null,
+        code,
+        expiresAt,
+      },
+    });
+
+    const data = showCode
+      ? {
+          sent: true,
+          signupOtp: code,
+          expiresAt: expiresAt.toISOString(),
+          channel: body.email ? "email" : "phone",
+        }
+      : { sent: true, channel: body.email ? "email" : "phone" };
+
+    return res.apiSuccess(data, "OK", 200);
+  } catch (err) {
+    if (err instanceof HttpError) throw err;
+    console.error("[auth.sendSignupOtp] failed", {
+      channel: body.email ? "email" : "phone",
+      prismaCode: err?.code || null,
+      message: err?.message || "Unknown error",
+    });
+    throw new HttpError(
+      500,
+      "Failed to create signup verification",
+      {
+        step: "signupVerification.create",
+        prismaCode: err?.code || null,
+      },
+      "SIGNUP_OTP_SEND_FAILED"
+    );
+  }
 });
 
 exports.verifySignupOtp = asyncHandler(async (req, res) => {
