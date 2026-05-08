@@ -194,16 +194,37 @@ const verifySignupOtpSchema = z
     email: z.string().email().max(150).optional(),
     phoneNumber: z.string().min(5).max(20).optional(),
     countryCode: z.string().max(5).optional(),
-    signupOtp: z.string().min(4).max(10),
+    signupOtp: z.string().min(4).max(10).optional(),
+    otp: z.string().min(4).max(10).optional(),
+    code: z.string().min(4).max(10).optional(),
+    verificationCode: z.string().min(4).max(10).optional(),
   })
   .strict()
-  .refine((v) => Boolean(v.email || v.phoneNumber), {
-    message: "Either email or phoneNumber is required",
-    path: ["email"],
+  .refine((v) => Boolean(v.signupOtp || v.otp || v.code || v.verificationCode), {
+    message: "signupOtp (or otp/code/verificationCode) is required",
+    path: ["signupOtp"],
   })
   .refine((v) => !(v.email && v.phoneNumber), {
     message: "Send only email or phoneNumber, not both",
     path: ["email"],
+  })
+  .transform((v) => ({
+    ...v,
+    signupOtp: v.signupOtp ?? v.otp ?? v.code ?? v.verificationCode,
+  }))
+  .superRefine((v, ctx) => {
+    if (!v.email && !v.phoneNumber) {
+      // Compatibility mode for existing clients that only send code.
+      // Controller will match by latest active code.
+      return;
+    }
+    if (v.email && v.phoneNumber) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Send only email or phoneNumber, not both",
+        path: ["email"],
+      });
+    }
   });
 
 const updateUserSchema = z

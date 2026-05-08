@@ -156,9 +156,13 @@ module.exports = {
         email: { type: "string", format: "email", maxLength: 150 },
         phoneNumber: { type: "string", minLength: 5, maxLength: 20 },
         countryCode: { type: "string", maxLength: 5 },
-        signupOtp: { type: "string", minLength: 4, maxLength: 10 },
+        signupOtp: { type: "string", minLength: 4, maxLength: 10, description: "Preferred key." },
+        otp: { type: "string", minLength: 4, maxLength: 10, description: "Legacy alias for signupOtp." },
+        code: { type: "string", minLength: 4, maxLength: 10, description: "Legacy alias for signupOtp." },
+        verificationCode: { type: "string", minLength: 4, maxLength: 10, description: "Legacy alias for signupOtp." },
       },
-      description: "Verify signup OTP before registration. Provide exactly one of `email` or `phoneNumber`.",
+      description:
+        "Verify signup OTP before registration. Preferred payload is `signupOtp` and one identity (`email` or `phoneNumber`). For backward compatibility, `otp`, `code`, and `verificationCode` are accepted aliases.",
       example: { email: "norhankandil160@gmail.com", signupOtp: "111111" },
     },
     LoginBody: {
