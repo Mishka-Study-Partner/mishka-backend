@@ -890,7 +890,7 @@ model TodoList {
 model Task {
   id          String       @id @default(uuid()) @map("task_id")
   userId      String       @map("user_id")
-  listId      String       @map("list_id")
+  listId      String?      @map("list_id")
   title       String       @db.VarChar(255)
   description String?
   dueDate     DateTime?    @map("due_date") @db.Date
@@ -902,7 +902,7 @@ model Task {
   updatedAt   DateTime     @updatedAt @map("updated_at")
 
   user                     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  list                     TodoList                  @relation(fields: [listId], references: [id], onDelete: Cascade)
+  list                     TodoList?                 @relation(fields: [listId], references: [id], onDelete: Cascade)
   studyConcentrationSessions StudyConcentrationSession[]
 
   @@index([userId])

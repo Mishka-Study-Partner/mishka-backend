@@ -112,9 +112,40 @@ Errors use `success: false`, `data: null`, `error` as a **stable machine code** 
 - `POST /auth/register` → `201`, tokens + `data.user` (includes education columns when stored).
 - `POST /auth/login` → `200`, same token envelope.
 - `POST /auth/oauth/google` \| `POST /auth/oauth/apple` \| `POST /auth/oauth/facebook` → `201` (new user) or `200` (existing), same token envelope.
-- `GET /auth/me` — JWT required.
+- `GET /auth/me` — JWT required. Returns `data.user` + `data.preference`.
+- `PATCH /auth/me` — JWT required. Partial update of own profile (send only changed fields). Returns updated `data.user` + `data.preference`. See **Profile update** below.
+- `POST /auth/me/avatar` — JWT required. Multipart upload (field `avatar`). Returns updated user with new `profileImageUrl`.
+- `DELETE /auth/me/avatar` — JWT required. Removes avatar, sets `profileImageUrl` to `null`.
 
 All routes except `/`, `/openapi.json`, `/api-docs`, `/auth/send-signup-otp`, `/auth/register`, `/auth/login`, `/auth/forgot-password`, `/auth/reset-password`, `/auth/oauth/google`, `/auth/oauth/apple`, `/auth/oauth/facebook` require `Authorization: Bearer <token>`.
+
+### Profile update
+
+**`PATCH /auth/me`** — self-service profile update. All fields are optional; send only what changed. At least one field must be present. Admin-only fields (`role`, `isVerified`) are rejected.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `firstName` | string 1–50 | |
+| `lastName` | string 1–50 | |
+| `fullName` | string ≤ 150 | Auto-derived from firstName + lastName when omitted |
+| `email` | email ≤ 150 | Returns `409 UNIQUE_VIOLATION` if taken |
+| `phoneNumber` | string ≤ 20 | Returns `409 UNIQUE_VIOLATION` if taken |
+| `countryCode` | string ≤ 5 | |
+| `gender` | `male` \| `female` \| `prefer_not_to_say` \| `null` | nullable |
+| `profileImageUrl` | string ≤ 2048 \| `null` | use avatar endpoints for file upload |
+| `password` | string 8–20 | same policy as registration |
+| `educationStatus` | `school` \| `university` \| `other` | |
+| `educationOtherDetail` | string ≤ 500 \| `null` | |
+| `schoolTrack` | `middle_school` \| `high_school` \| `null` | |
+| `schoolGrade` | integer 1–3 \| `null` | |
+| `universityYear` | integer 1–5 \| `null` | |
+
+`username` is auto-regenerated when name fields change.
+
+### Profile photo
+
+- **`POST /auth/me/avatar`** — `multipart/form-data`, single field **`avatar`** (JPEG, PNG, WebP, or GIF; max 20 MB). Old avatar file is automatically deleted. Returns updated user with the new `profileImageUrl`. Set `AVATAR_BASE_URL` env var in production for the correct public URL.
+- **`DELETE /auth/me/avatar`** — deletes the file and sets `profileImageUrl` to `null`.
 
 ## AI (Flutter `MishkaAiService`)
 
@@ -151,7 +182,7 @@ Base paths **`/todo-lists`** and **`/tasks`** (JWT); also **`GET /users/:id/todo
 
 **Lists:** **`listName`**, **`listType`** (`calendar` \| `college` \| `work` \| `personal`), optional **`iconId`** (catalog **`/icons`**). Nested **`GET/POST /todo-lists/:id/tasks`**.
 
-**Tasks:** **`listId`**, **`title`**, optional **`description`**, **`dueDate`** + **`dueTime`** (UTC calendar semantics on the wire), **`status`**: **`pending`**, **`completed`**, **`missed`** — set **`missed`** via **`PUT /tasks/:id`** when something is overdue (or keep **`pending`** and derive UX client-side).
+**Tasks:** **`title`** is required; **`listId`** is **optional** — omit it to create a standalone task not attached to any todo list. Other optional fields: **`description`**, **`dueDate`** + **`dueTime`** (UTC calendar semantics on the wire), **`status`**: **`pending`**, **`completed`**, **`missed`**, **`priority`**: **`low`**, **`medium`**, **`high`**, **`taskType`**: **`online`**, **`offline`**. Use **`PATCH /tasks/:id`** (or **`PUT`**) to update — send only changed fields, e.g. `{ "status": "completed" }`. **`DELETE /tasks/:id`** removes the task. **`PATCH /todo-lists/:id`** (or **`PUT`**) to rename / update a list.
 
 **List lists — query:** **`q`** (search **`listName`**), **`listType`**, **`limit`**, **`offset`**.
 

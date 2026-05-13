@@ -1383,9 +1383,11 @@ const paths = {
     post: {
       tags: ["Tasks"],
       summary: "Create task",
+      description:
+        "**`listId`** is optional — omit it to create a standalone task not attached to any todo list. When provided, the task is linked to that list. Required fields: **`title`**. Optional: `description`, `dueDate` (YYYY-MM-DD), `dueTime` (HH:mm:ss), `status`, `priority`, `taskType`.",
       parameters: lang,
       security: bearer,
-      requestBody: jsonBody("#/components/schemas/JsonRecord", ""),
+      requestBody: jsonBody("#/components/schemas/JsonRecord", "", { title: "Buy groceries", dueDate: "2026-06-01", priority: "high" }),
       responses: std({ 201: R.CreatedEnvelope }),
     },
   },
