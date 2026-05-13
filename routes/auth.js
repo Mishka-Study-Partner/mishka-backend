@@ -1,6 +1,7 @@
 ﻿const express = require("express");
 const c = require("../controllers/authController");
 const { requireAuth } = require("../middleware/auth");
+const upload = require("../middleware/upload");
 const { validate } = require("../middleware/validateRequest");
 const {
   registerSchema,
@@ -9,6 +10,7 @@ const {
   resetPasswordSchema,
   sendSignupOtpSchema,
   verifySignupOtpSchema,
+  updateMeSchema,
   oauthGoogleSchema,
   oauthAppleSchema,
   oauthFacebookSchema,
@@ -21,6 +23,9 @@ router.post("/verify-signup-otp", validate(verifySignupOtpSchema), c.verifySignu
 router.post("/register", validate(registerSchema), c.register);
 router.post("/login", validate(loginSchema), c.login);
 router.get("/me", requireAuth, c.me);
+router.patch("/me", requireAuth, validate(updateMeSchema), c.updateMe);
+router.post("/me/avatar", requireAuth, upload.single("avatar"), c.uploadAvatar);
+router.delete("/me/avatar", requireAuth, c.deleteAvatar);
 router.post("/logout", requireAuth, c.logout);
 router.post("/forgot-password", validate(forgotPasswordSchema), c.forgotPassword);
 router.post("/reset-password", validate(resetPasswordSchema), c.resetPassword);

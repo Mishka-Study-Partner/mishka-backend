@@ -236,6 +236,44 @@ const updateUserSchema = z
     }
   });
 
+/** Self-service profile update — no admin-only fields (role, isVerified, provider, providerId). */
+const updateMeSchema = z
+  .object({
+    firstName: z.string().min(1).max(50).optional(),
+    lastName: z.string().min(1).max(50).optional(),
+    fullName: z.string().max(150).optional(),
+    email: z.string().email().max(150).optional(),
+    phoneNumber: z.string().max(20).optional(),
+    countryCode: z.string().max(5).optional(),
+    gender: z.enum(["male", "female", "prefer_not_to_say"]).optional().nullable(),
+    profileImageUrl: z.string().max(2048).optional().nullable(),
+    password: z.string().max(255).nullable().optional(),
+    rememberMe: z.boolean().optional(),
+    educationStatus: z.enum(["school", "university", "other"]).optional(),
+    educationOtherDetail: z.string().max(500).optional().nullable(),
+    schoolTrack: z.enum(["middle_school", "high_school"]).optional().nullable(),
+    schoolGrade: z.coerce.number().int().min(1).max(3).optional().nullable(),
+    universityYear: z.coerce.number().int().min(1).max(5).optional().nullable(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (Object.keys(data).filter((k) => data[k] !== undefined).length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "At least one field is required",
+        path: ["firstName"],
+      });
+    }
+    if (data.password != null && data.password !== "") {
+      const r = passwordPolicy.safeParse(data.password);
+      if (!r.success) {
+        for (const issue of r.error.issues) {
+          ctx.addIssue({ ...issue, path: ["password"] });
+        }
+      }
+    }
+  });
+
 /** @param {Record<string, unknown>} data @param {import("zod").RefinementCtx} ctx */
 function refineOAuthEducation(data, ctx) {
   if (!data.educationStatus) return;
@@ -840,6 +878,7 @@ module.exports = {
   studyTelemetryBatchSchema,
   studyMlReportSchema,
   studyCallBreakEndSchema,
+  updateMeSchema,
   taskListQuerySchema,
   todoListQuerySchema,
 };

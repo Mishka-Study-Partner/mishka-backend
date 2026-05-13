@@ -193,6 +193,15 @@ const AuthMe200Ok = successEnvelope(
   }
 );
 
+const UpdateMe200Ok = successEnvelope(
+  "200 OK",
+  "Profile updated. Returns the full user object (same shape as `GET /auth/me`) with the changes applied. `username` is auto-regenerated when name fields change.",
+  {
+    user: Ex.exampleUser,
+    preference: Ex.preferenceExample,
+  }
+);
+
 const OAuthReturn200Ok = successEnvelope(
   "200 OK",
   "Existing OAuth-linked account; same `data` shape as `POST /auth/login` (tokens + user).",
@@ -332,6 +341,7 @@ module.exports = {
   ForgotPassword200Ok,
   ResetPassword200Ok,
   AuthMe200Ok,
+  UpdateMe200Ok,
   OAuthReturn200Ok,
   Login200Ok,
 

@@ -282,6 +282,29 @@ module.exports = {
       description:
         "`username` is **not** accepted here; it is regenerated when `firstName`, `lastName`, or `fullName` change. Non-admins cannot change `role` or `isVerified` (ignored server-side).",
     },
+    UpdateMeBody: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        firstName: { type: "string", minLength: 1, maxLength: 50 },
+        lastName: { type: "string", minLength: 1, maxLength: 50 },
+        fullName: { type: "string", maxLength: 150, description: "Auto-derived from firstName + lastName when omitted." },
+        email: { type: "string", format: "email", maxLength: 150 },
+        phoneNumber: { type: "string", maxLength: 20 },
+        countryCode: { type: "string", maxLength: 5, example: "+20" },
+        gender: { type: "string", enum: ["male", "female", "prefer_not_to_say"], nullable: true },
+        profileImageUrl: { type: "string", maxLength: 2048, nullable: true },
+        password: { type: "string", nullable: true, minLength: 8, maxLength: 20, description: "If set, must satisfy policy (upper, lower, digit, special)." },
+        rememberMe: { type: "boolean" },
+        educationStatus: { type: "string", enum: ["school", "university", "other"] },
+        educationOtherDetail: { type: "string", maxLength: 500, nullable: true },
+        schoolTrack: { type: "string", enum: ["middle_school", "high_school"], nullable: true },
+        schoolGrade: { type: "integer", minimum: 1, maximum: 3, nullable: true },
+        universityYear: { type: "integer", minimum: 1, maximum: 5, nullable: true },
+      },
+      description:
+        "All fields are optional — send only what changed. At least one field must be present. Admin-only fields (`role`, `isVerified`) are not accepted here. `username` is auto-regenerated when name fields change.",
+    },
     AppPublicSettingsData: {
       type: "object",
       description: "Singleton row (`settings_id` = `default`).",

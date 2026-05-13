@@ -1,5 +1,6 @@
 node_modules
 data/ai-uploads/
+uploads/avatars/
 # Keep environment variables out of version control
 .env
 

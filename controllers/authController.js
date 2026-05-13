@@ -407,6 +407,127 @@ exports.me = asyncHandler(async (req, res) => {
   return res.apiSuccess({ user: safeUser, preference: userPreference ?? null }, "OK", 200);
 });
 
+exports.updateMe = asyncHandler(async (req, res) => {
+  const userId = req.auth.sub;
+  const body = req.body;
+
+  const data = {};
+  if (body.firstName !== undefined) data.firstName = body.firstName;
+  if (body.lastName !== undefined) data.lastName = body.lastName;
+  if (body.email !== undefined) data.email = body.email;
+  if (body.phoneNumber !== undefined) data.phoneNumber = body.phoneNumber;
+  if (body.countryCode !== undefined) data.countryCode = body.countryCode;
+  if (body.gender !== undefined) data.gender = body.gender;
+  if (body.profileImageUrl !== undefined) data.profileImageUrl = body.profileImageUrl;
+  if (body.rememberMe !== undefined) data.rememberMe = body.rememberMe;
+  if (body.educationStatus !== undefined) data.educationStatus = body.educationStatus;
+  if (body.educationOtherDetail !== undefined) data.educationOtherDetail = body.educationOtherDetail;
+  if (body.schoolTrack !== undefined) data.schoolTrack = body.schoolTrack;
+  if (body.schoolGrade !== undefined) data.schoolGrade = body.schoolGrade;
+  if (body.universityYear !== undefined) data.universityYear = body.universityYear;
+
+  if (body.fullName !== undefined) {
+    data.fullName = body.fullName;
+  } else if (body.firstName !== undefined || body.lastName !== undefined) {
+    const current = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+    const fn = body.firstName ?? current?.firstName ?? "";
+    const ln = body.lastName ?? current?.lastName ?? "";
+    data.fullName = `${fn} ${ln}`.trim().slice(0, 150);
+  }
+
+  if (body.password != null && body.password !== "") {
+    data.password = await bcrypt.hash(body.password, SALT_ROUNDS);
+  }
+
+  if (data.firstName || data.lastName || data.fullName) {
+    const current = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true, fullName: true } });
+    const username = await allocateUsername(prisma, {
+      firstName: data.firstName ?? current?.firstName,
+      lastName: data.lastName ?? current?.lastName,
+      fullName: data.fullName ?? current?.fullName,
+      excludeUserId: userId,
+    });
+    data.username = username;
+  }
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data,
+      include: { userPreference: true },
+    });
+    const { password: _pw, userPreference, ...safeUser } = updated;
+    void _pw;
+    return res.apiSuccess({ user: safeUser, preference: userPreference ?? null }, "OK", 200);
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      throw new HttpError(409, "Email or phone number is already in use", { target: e.meta?.target }, "UNIQUE_VIOLATION");
+    }
+    throw e;
+  }
+});
+
+exports.uploadAvatar = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new HttpError(400, "No file uploaded. Send a multipart field named 'avatar'.", undefined, "VALIDATION_ERROR");
+  }
+
+  const allowedMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+  if (!allowedMimes.includes(req.file.mimetype)) {
+    throw new HttpError(400, "Only JPEG, PNG, WebP, and GIF images are allowed.", undefined, "VALIDATION_ERROR");
+  }
+
+  const fs = require("fs");
+  const path = require("path");
+  const ext = req.file.originalname.split(".").pop()?.toLowerCase() || "jpg";
+  const filename = `${req.auth.sub}_${Date.now()}.${ext}`;
+  const dir = path.join(__dirname, "..", "uploads", "avatars");
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  const oldUser = await prisma.user.findUnique({ where: { id: req.auth.sub }, select: { profileImageUrl: true } });
+  if (oldUser?.profileImageUrl) {
+    const oldPath = path.join(__dirname, "..", oldUser.profileImageUrl.replace(/^\//, ""));
+    if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+  }
+
+  fs.writeFileSync(path.join(dir, filename), req.file.buffer);
+
+  const host = req.get("host");
+  const protocol = req.protocol;
+  const baseUrl = process.env.AVATAR_BASE_URL || `${protocol}://${host}`;
+  const profileImageUrl = `${baseUrl}/uploads/avatars/${filename}`;
+
+  const updated = await prisma.user.update({
+    where: { id: req.auth.sub },
+    data: { profileImageUrl },
+    include: { userPreference: true },
+  });
+  const { password: _pw2, userPreference, ...safeUser } = updated;
+  void _pw2;
+  return res.apiSuccess({ user: safeUser, preference: userPreference ?? null }, "OK", 200);
+});
+
+exports.deleteAvatar = asyncHandler(async (req, res) => {
+  const fs = require("fs");
+  const path = require("path");
+
+  const user = await prisma.user.findUnique({ where: { id: req.auth.sub }, select: { profileImageUrl: true } });
+  if (user?.profileImageUrl && user.profileImageUrl.includes("/uploads/avatars/")) {
+    const url = new URL(user.profileImageUrl);
+    const filePath = path.join(__dirname, "..", url.pathname.replace(/^\//, ""));
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: req.auth.sub },
+    data: { profileImageUrl: null },
+    include: { userPreference: true },
+  });
+  const { password: _pw3, userPreference: pref, ...safeUser } = updated;
+  void _pw3;
+  return res.apiSuccess({ user: safeUser, preference: pref ?? null }, "OK", 200);
+});
+
 exports.logout = asyncHandler(async (req, res) => {
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;

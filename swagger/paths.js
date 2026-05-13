@@ -291,6 +291,63 @@ const paths = {
         200: R.AuthMe200Ok,
       },
     },
+    patch: {
+      tags: ["Auth"],
+      summary: "Update own profile",
+      description:
+        "Requires `Authorization: Bearer <accessToken>`. Send only the fields that changed — at least one field is required. Admin-only fields (`role`, `isVerified`) cannot be set via this route. `username` is auto-regenerated when `firstName`, `lastName`, or `fullName` change. If the new `email` or `phoneNumber` is already taken, a `409 UNIQUE_VIOLATION` is returned.",
+      parameters: lang,
+      security: bearer,
+      requestBody: jsonBody("#/components/schemas/UpdateMeBody", "", {
+        firstName: "Norhan",
+        lastName: "Mohamed",
+        gender: "female",
+      }),
+      responses: {
+        ...std({ 409: R.defaultError }),
+        200: R.UpdateMe200Ok,
+      },
+    },
+  },
+  "/auth/me/avatar": {
+    post: {
+      tags: ["Auth"],
+      summary: "Upload profile photo",
+      description:
+        "Requires `Authorization: Bearer <accessToken>`. Send a **multipart/form-data** request with a single field named **`avatar`** (JPEG, PNG, WebP, or GIF, max 20 MB). The old avatar file is automatically deleted. Returns the updated user object with the new `profileImageUrl`. Tip: set `AVATAR_BASE_URL` env var for production URLs.",
+      parameters: lang,
+      security: bearer,
+      requestBody: {
+        required: true,
+        content: {
+          "multipart/form-data": {
+            schema: {
+              type: "object",
+              required: ["avatar"],
+              properties: {
+                avatar: { type: "string", format: "binary", description: "Image file (JPEG/PNG/WebP/GIF, max 20 MB)." },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        ...std(),
+        200: R.UpdateMe200Ok,
+      },
+    },
+    delete: {
+      tags: ["Auth"],
+      summary: "Remove profile photo",
+      description:
+        "Requires `Authorization: Bearer <accessToken>`. Deletes the avatar file from the server and sets `profileImageUrl` to `null`. Returns the updated user object.",
+      parameters: lang,
+      security: bearer,
+      responses: {
+        ...std(),
+        200: R.UpdateMe200Ok,
+      },
+    },
   },
   "/auth/logout": {
     post: {
@@ -1269,10 +1326,20 @@ const paths = {
     },
     put: {
       tags: ["Todo lists"],
-      summary: "Update todo list",
+      summary: "Update todo list (full)",
       parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
       security: bearer,
       requestBody: jsonBody("#/components/schemas/JsonRecord", ""),
+      responses: std(),
+    },
+    patch: {
+      tags: ["Todo lists"],
+      summary: "Update todo list (partial)",
+      description:
+        "Same handler as PUT — send only the fields to change (e.g. `listName`, `listType`, `iconId`).",
+      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      security: bearer,
+      requestBody: jsonBody("#/components/schemas/JsonRecord", "", { listName: "Midterms" }),
       responses: std(),
     },
     delete: {
@@ -1332,10 +1399,20 @@ const paths = {
     },
     put: {
       tags: ["Tasks"],
-      summary: "Update task",
+      summary: "Update task (full)",
       parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
       security: bearer,
       requestBody: jsonBody("#/components/schemas/JsonRecord", ""),
+      responses: std(),
+    },
+    patch: {
+      tags: ["Tasks"],
+      summary: "Update task (partial)",
+      description:
+        "Same handler as PUT — send only the fields to change (e.g. `title`, `dueDate`, `status` → `completed`).",
+      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      security: bearer,
+      requestBody: jsonBody("#/components/schemas/JsonRecord", "", { status: "completed" }),
       responses: std(),
     },
     delete: {
