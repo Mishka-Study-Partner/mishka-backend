@@ -1,15 +1,25 @@
-# Backend Changes for Flutter Team
+# Backend Update — For Flutter Team
 
-**Date:** May 13, 2026
-**Deploy required:** Yes — redeploy on Railway after pulling these changes.
+**Date:** May 13, 2026  
+**Version:** Profile, Tasks & Avatar release  
+**Deploy required:** Yes — redeploy on Railway + run `prisma migrate deploy`
 
 ---
 
-## 1. PATCH /auth/me — Profile Update (NEW, was blocking)
+## What was blocking and is now fixed
 
-The app can now update the authenticated user's profile.
+| # | Issue | Status |
+|---|-------|--------|
+| 1 | Profile update returns 404 | Fixed — `PATCH /auth/me` |
+| 2 | Tasks can't be updated/completed/deleted | Fixed — `PATCH /tasks/{id}`, `DELETE /tasks/{id}` |
+| 3 | Tasks require a list (can't create standalone) | Fixed — `listId` is now optional |
+| 4 | Todo lists can't be renamed/updated | Fixed — `PATCH /todo-lists/{id}` |
+| 5 | No profile photo upload | Fixed — `POST /auth/me/avatar` |
+| 6 | Icons endpoint missing | Was already working — `GET /icons` |
 
-**Request:**
+---
+
+## 1. PATCH /auth/me — Update Profile
 
 ```
 PATCH /auth/me
@@ -17,33 +27,39 @@ Authorization: Bearer <jwt>
 Content-Type: application/json
 ```
 
-**Body** (all fields optional, send only what changed):
+Send **only the fields that changed**. At least one field is required.
+
+### Accepted fields
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `firstName` | string 1–50 | |
+| `lastName` | string 1–50 | |
+| `fullName` | string ≤150 | Auto-derived if omitted but firstName/lastName sent |
+| `email` | email | 409 if taken by another user |
+| `phoneNumber` | string ≤20 | 409 if taken by another user |
+| `countryCode` | string ≤5 | e.g. `"+20"` |
+| `gender` | `male` \| `female` \| `prefer_not_to_say` \| `null` | |
+| `profileImageUrl` | string \| `null` | Use avatar endpoint for file upload |
+| `password` | string 8–20 | Same policy as registration |
+| `educationStatus` | `school` \| `university` \| `other` | |
+| `educationOtherDetail` | string \| `null` | |
+| `schoolTrack` | `middle_school` \| `high_school` \| `null` | |
+| `schoolGrade` | 1–3 \| `null` | |
+| `universityYear` | 1–5 \| `null` | |
+
+### Example request
 
 ```json
 {
   "firstName": "Norhan",
   "lastName": "Mohamed",
-  "fullName": "Norhan Mohamed",
-  "email": "norhan.moh99@gmail.com",
-  "phoneNumber": "01065011881",
-  "countryCode": "+20",
   "gender": "female",
-  "profileImageUrl": "https://...",
-  "educationStatus": "university",
-  "universityYear": 3,
-  "password": "NewPass1@"
+  "countryCode": "+20"
 }
 ```
 
-**Validation rules:**
-- At least one field must be present
-- `gender`: `male` | `female` | `prefer_not_to_say` | `null`
-- `educationStatus`: `school` | `university` | `other`
-- `password`: same policy as registration (8-20 chars, upper + lower + special)
-- `email` / `phoneNumber`: returns **409** `UNIQUE_VIOLATION` if already taken
-- Admin-only fields (`role`, `isVerified`) are **not** accepted on this route
-
-**Success response** (same envelope as GET /auth/me):
+### Response (same shape as GET /auth/me)
 
 ```json
 {
@@ -53,7 +69,7 @@ Content-Type: application/json
   "message_ar": "تم",
   "data": {
     "user": {
-      "id": "...",
+      "id": "uuid",
       "firstName": "Norhan",
       "lastName": "Mohamed",
       "fullName": "Norhan Mohamed",
@@ -67,8 +83,8 @@ Content-Type: application/json
       "universityYear": 3,
       "role": "student",
       "isVerified": true,
-      "createdAt": "...",
-      "updatedAt": "..."
+      "createdAt": "2026-05-13T...",
+      "updatedAt": "2026-05-13T..."
     },
     "preference": null
   },
@@ -77,18 +93,23 @@ Content-Type: application/json
 }
 ```
 
-**Error responses:**
-- **400** `VALIDATION_ERROR` — invalid fields or empty body
-- **401** `AUTH_MISSING_TOKEN` — no/invalid JWT
-- **409** `UNIQUE_VIOLATION` — email or phone already taken by another user
+### Error codes
 
-**Flutter integration:**
-- Lock the client to `PATCH /auth/me` — remove the fallback chain (`PUT /users/me`, `PATCH /users/me`, etc.)
-- `username` auto-regenerates when firstName/lastName/fullName change — no need to send it
+| HTTP | Code | When |
+|------|------|------|
+| 400 | `VALIDATION_ERROR` | Invalid field value or empty body |
+| 401 | `AUTH_MISSING_TOKEN` | No or invalid JWT |
+| 409 | `UNIQUE_VIOLATION` | Email or phone already taken |
+
+### Flutter action items
+
+- Lock client to **`PATCH /auth/me`** — remove any fallback chain (`PUT /users/me`, etc.)
+- Don't send `username` — it auto-regenerates when name fields change
+- Don't send `role` or `isVerified` — they are rejected
 
 ---
 
-## 2. POST/DELETE /auth/me/avatar — Profile Photo (NEW)
+## 2. POST/DELETE /auth/me/avatar — Profile Photo
 
 ### Upload
 
@@ -98,12 +119,10 @@ Authorization: Bearer <jwt>
 Content-Type: multipart/form-data
 ```
 
-Send a single field named **`avatar`** containing the image file.
-
-- Accepted formats: JPEG, PNG, WebP, GIF
+- Field name: **`avatar`**
+- Accepted: JPEG, PNG, WebP, GIF
 - Max size: 20 MB
-- Old avatar is automatically deleted on re-upload
-- Returns updated user object with new `profileImageUrl`
+- Old photo is auto-deleted on re-upload
 
 **Dart / Dio example:**
 
@@ -120,7 +139,8 @@ final response = await dio.post(
   data: formData,
   options: Options(headers: {'Authorization': 'Bearer $token'}),
 );
-// response.data['data']['user']['profileImageUrl'] → new URL
+
+final newUrl = response.data['data']['user']['profileImageUrl'];
 ```
 
 ### Delete
@@ -130,116 +150,27 @@ DELETE /auth/me/avatar
 Authorization: Bearer <jwt>
 ```
 
-Sets `profileImageUrl` to `null` and removes the file from the server.
+Returns updated user with `profileImageUrl: null`.
+
+### Response
+
+Both endpoints return the same shape as `PATCH /auth/me` — full user object with `data.user.profileImageUrl` updated.
 
 ---
 
-## 3. PATCH /tasks/{id} — Task Partial Update (NEW)
+## 3. Tasks — PATCH, DELETE, and Standalone Creation
 
-Previously only `PUT` existed. Now `PATCH` is also accepted (same handler).
-
-**Example — mark a task as completed:**
-
-```
-PATCH /tasks/{id}
-Authorization: Bearer <jwt>
-Content-Type: application/json
-
-{ "status": "completed" }
-```
-
-**Example — update title and due date:**
-
-```json
-{ "title": "Buy groceries", "dueDate": "2026-06-01" }
-```
-
-Task status values: `pending` | `completed` | `missed`
-
-Both `PUT /tasks/{id}` and `PATCH /tasks/{id}` work identically — send only what changed.
-
-`DELETE /tasks/{id}` was already available.
-
----
-
-## 4. PATCH /todo-lists/{id} — Todo List Partial Update (NEW)
-
-Same pattern — `PATCH` is now accepted alongside `PUT`.
-
-**Example — rename a list:**
-
-```
-PATCH /todo-lists/{id}
-Authorization: Bearer <jwt>
-Content-Type: application/json
-
-{ "listName": "Midterm Prep" }
-```
-
-Accepted fields: `listName`, `listType` (`calendar` | `college` | `work` | `personal`), `iconId`.
-
-`DELETE /todo-lists/{id}` was already available.
-
----
-
-## 5. GET /icons — Already Existed (no change needed)
-
-```
-GET /icons
-Authorization: Bearer <jwt>
-```
-
-Returns the full icon catalog. Each icon has `id` (integer), `iconName`, `iconPath`.
-
-The app's `ApiEndpoints.icons = '/icons'` will work as-is.
-
----
-
-## 6. Existing Endpoints — Already Available (no action needed)
-
-These were listed as future features but already have full CRUD:
-
-| Path | Status |
-|------|--------|
-| `/user-preferences` | GET, POST, PUT, DELETE |
-| `/user-sessions` | GET, POST, PUT, DELETE (admin can list all) |
-| `/chat-sessions` | Full CRUD |
-| `/chat-messages` | Full CRUD |
-| `/ai-requests` | Full CRUD |
-| `/quiz-questions` | Full CRUD |
-| `/history-items` | Full CRUD |
-| `/password-reset-tokens` | Full CRUD (admin) |
-| `/study-with-mishka` | Full session lifecycle |
-| `/daily-streaks` | GET available |
-
----
-
-## Summary of Routes Added / Changed
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| `PATCH` | `/auth/me` | Update own profile |
-| `POST` | `/auth/me/avatar` | Upload profile photo (multipart) |
-| `DELETE` | `/auth/me/avatar` | Remove profile photo |
-| `PATCH` | `/tasks/{id}` | Partial update task |
-| `PATCH` | `/todo-lists/{id}` | Partial update todo list |
-| `POST` | `/tasks` | `listId` now optional — standalone tasks |
-
-All documented in Swagger: open `/api-docs` after deploy to see full schemas, examples, and try-it-out.
-
----
-
-## 7. POST /tasks — Standalone Tasks Without a List (CHANGED)
-
-`listId` is now **optional** when creating a task. You can create tasks that are not attached to any todo list.
-
-**Create a standalone task (no list):**
+### Create a task (listId is now OPTIONAL)
 
 ```
 POST /tasks
 Authorization: Bearer <jwt>
 Content-Type: application/json
+```
 
+**Standalone task (no list):**
+
+```json
 {
   "title": "Buy groceries",
   "dueDate": "2026-06-01",
@@ -247,36 +178,170 @@ Content-Type: application/json
 }
 ```
 
-**Create a task inside a list (still works, unchanged):**
+**Task in a list (still works as before):**
 
 ```json
 {
   "title": "Study chapter 5",
-  "listId": "<uuid of the todo list>",
-  "dueDate": "2026-06-01",
-  "status": "pending"
+  "listId": "<todo-list-uuid>",
+  "dueDate": "2026-06-01"
 }
 ```
 
-Or via the nested route: `POST /todo-lists/{id}/tasks` (no `listId` needed in body — it's taken from the URL).
+**Or via nested route:** `POST /todo-lists/{id}/tasks` — `listId` auto-set from URL.
 
-**Querying:**
-- `GET /tasks` returns all tasks (both standalone and list-attached)
-- `GET /tasks?listId=<uuid>` filters to a specific list
-- Standalone tasks have `listId: null` in the response
+### Update a task (partial)
 
-**Migration required:** `prisma migrate deploy` must run on the production database (included in the migration files).
+```
+PATCH /tasks/{id}
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+Send only what changed:
+
+```json
+{ "status": "completed" }
+```
+
+```json
+{ "title": "Updated title", "dueDate": "2026-07-01", "priority": "low" }
+```
+
+Both `PATCH` and `PUT` work — same handler, same behavior.
+
+### Delete a task
+
+```
+DELETE /tasks/{id}
+Authorization: Bearer <jwt>
+```
+
+### Task fields reference
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `title` | string ≤255 | Yes (on create) | |
+| `listId` | uuid \| null | No | Omit for standalone tasks |
+| `description` | string \| null | No | |
+| `dueDate` | `YYYY-MM-DD` | No | UTC date |
+| `dueTime` | `HH:mm:ss` | No | UTC time |
+| `status` | `pending` \| `completed` \| `missed` | No | Default: `pending` |
+| `priority` | `low` \| `medium` \| `high` | No | Default: `medium` |
+| `taskType` | `online` \| `offline` \| null | No | |
+
+### Querying tasks
+
+```
+GET /tasks
+GET /tasks?status=pending
+GET /tasks?listId=<uuid>
+GET /tasks?upcomingOnly=true&withinDays=7&limit=10
+GET /tasks?dueOn=2026-06-01
+```
+
+Standalone tasks have `listId: null` in the response.
 
 ---
 
-## Environment Variables (new, optional)
+## 4. PATCH /todo-lists/{id} — Update a List
+
+```
+PATCH /todo-lists/{id}
+Authorization: Bearer <jwt>
+Content-Type: application/json
+```
+
+```json
+{ "listName": "Midterm Prep" }
+```
+
+| Field | Type |
+|-------|------|
+| `listName` | string ≤100 |
+| `listType` | `calendar` \| `college` \| `work` \| `personal` |
+| `iconId` | integer (from `GET /icons`) \| null |
+
+Both `PATCH` and `PUT` work. `DELETE /todo-lists/{id}` also available.
+
+---
+
+## 5. GET /icons — Icon Catalog (already existed)
+
+```
+GET /icons
+Authorization: Bearer <jwt>
+```
+
+Returns array of icons:
+
+```json
+[
+  { "id": 1, "iconName": "book", "iconPath": "/icons/book.svg" },
+  { "id": 2, "iconName": "calendar", "iconPath": "/icons/calendar.svg" }
+]
+```
+
+No changes needed in the app — `ApiEndpoints.icons = '/icons'` works.
+
+---
+
+## 6. Other Endpoints — Already Available
+
+These were mentioned in the audit but already exist:
+
+| Path | Methods | Notes |
+|------|---------|-------|
+| `/user-preferences` | GET, POST, PUT, DELETE | Language/theme/notifications |
+| `/user-sessions` | GET, PUT, DELETE | Admin can list all |
+| `/chat-sessions` | Full CRUD | |
+| `/chat-messages` | Full CRUD | |
+| `/ai-requests` | Full CRUD | |
+| `/quiz-questions` | Full CRUD | |
+| `/history-items` | Full CRUD | |
+| `/daily-streaks` | GET | |
+| `/study-with-mishka` | Full lifecycle | |
+| `/password-reset-tokens` | Full CRUD (admin) | |
+
+---
+
+## Quick Reference — All New Routes
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `PATCH` | `/auth/me` | Update own profile (partial) |
+| `POST` | `/auth/me/avatar` | Upload profile photo |
+| `DELETE` | `/auth/me/avatar` | Remove profile photo |
+| `POST` | `/tasks` | Create task (listId now optional) |
+| `PATCH` | `/tasks/{id}` | Update task (partial) |
+| `DELETE` | `/tasks/{id}` | Delete task (already existed) |
+| `PATCH` | `/todo-lists/{id}` | Update list (partial) |
+| `DELETE` | `/todo-lists/{id}` | Delete list (already existed) |
+
+---
+
+## Deploy Checklist
+
+1. Pull latest backend code
+2. On Railway, redeploy the backend service
+3. Run database migration: `npx prisma migrate deploy`  
+   (This makes `list_id` nullable in the tasks table)
+4. Verify in Swagger (`/api-docs`) that the new endpoints appear
+
+---
+
+## New Environment Variables (optional)
 
 | Variable | Purpose | Default |
 |----------|---------|---------|
-| `AVATAR_BASE_URL` | Public base URL for avatar files (e.g. `https://mishka-backend-production.up.railway.app`) | Auto-detected from request |
+| `AVATAR_BASE_URL` | Public URL prefix for uploaded avatars | Auto-detected from request host |
+
+Set this on Railway if avatar URLs need a specific domain (e.g. `https://mishka-backend-production.up.railway.app`).
 
 ---
 
-## Minor Note
+## Notes for Flutter
 
-`/auth/send-signup-otp` is hardcoded as a string in `auth_remote_data_source.dart` instead of referencing `ApiEndpoints`. Not a backend issue — the route exists and works — but consider moving it to `ApiEndpoints` for consistency.
+- `/auth/send-signup-otp` is hardcoded in `auth_remote_data_source.dart` — consider moving to `ApiEndpoints` for consistency
+- The `taskActionsComingSoon` localized string can now be removed — task actions are fully functional
+- All new endpoints are documented in Swagger (`/api-docs`) with full schemas and try-it-out

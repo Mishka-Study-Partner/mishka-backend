@@ -1,7 +1,7 @@
 -- Session metadata for richer reports + optional ML schema version.
 ALTER TABLE "study_concentration_sessions"
 ADD COLUMN "tags" JSONB,
-ADD COLUMN "linked_task_id" UUID,
+ADD COLUMN "linked_task_id" TEXT,
 ADD COLUMN "outcome_notes" VARCHAR(2000),
 ADD COLUMN "client_app_version" VARCHAR(40),
 ADD COLUMN "platform" VARCHAR(40);

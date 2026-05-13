@@ -403,7 +403,7 @@ model StudyConcentrationSession {
   /// Optional string tags (normalized array JSON, max length enforced in API).
   tags Json? @map("tags")
   /// Linked todo task (same owner).
-  linkedTaskId String? @map("linked_task_id") @db.Uuid
+  linkedTaskId String? @map("linked_task_id")
   /// Optional reflection when ending session.
   outcomeNotes String? @map("outcome_notes") @db.VarChar(2000)
   clientAppVersion String? @map("client_app_version") @db.VarChar(40)

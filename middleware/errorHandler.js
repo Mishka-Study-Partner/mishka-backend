@@ -63,8 +63,9 @@ function errorHandler(err, req, res, _next) {
 
   console.error(err);
   const body = buildErrorBody(err, req);
-  if (process.env.NODE_ENV === "development" && err.message) {
-    body.details = body.details || { developerMessage: err.message };
+  const isDev = process.env.NODE_ENV === "development" || process.env.SHOW_ERROR_DETAILS === "true";
+  if (isDev && err.message) {
+    body.details = body.details || { developerMessage: err.message, errorName: err.constructor?.name };
   }
   return res.status(500).json(body);
 }
