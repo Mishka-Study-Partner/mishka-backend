@@ -126,6 +126,14 @@ const ERROR_MESSAGES = {
     en: "Failed to start study session",
     ar: "فشل بدء جلسة الدراسة",
   },
+  INVALID_JSON_BODY: {
+    en: "Invalid JSON in request body",
+    ar: "محتوى الطلب ليس JSON صالحاً",
+  },
+  APP_PUBLIC_SETTINGS_FAILED: {
+    en: "Failed to load app settings",
+    ar: "فشل تحميل إعدادات التطبيق",
+  },
 };
 
 function messagesForCode(code) {

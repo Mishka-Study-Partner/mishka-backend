@@ -198,11 +198,14 @@ const paths = {
     get: {
       tags: ["Public app content"],
       summary: "Privacy policy and help & support (public)",
-      description:
-        "No authentication. Returns singleton `privacyPolicyText` (admin-edited) and optional support fields (`supportEmail`, `supportPhone`, `supportFacebookUrl`, `supportInstagramUrl`).",
+      description: [
+        "No authentication — do not click Authorize for this operation.",
+        "Returns singleton `privacyPolicyText` and optional support fields (`supportEmail`, `supportPhone`, `supportFacebookUrl`, `supportInstagramUrl`).",
+        "Support fields are often `null` until an admin fills them via **PUT**.",
+      ].join(" "),
       parameters: lang,
       responses: {
-        200: R.OkEnvelope,
+        200: R.AppPublicSettings200Ok,
         400: R.BadRequest,
         500: R.InternalError,
       },
@@ -210,11 +213,22 @@ const paths = {
     put: {
       tags: ["Public app content"],
       summary: "Update privacy policy and support contacts (admin)",
-      description: "Requires JWT with `admin` role. Partial updates allowed.",
+      description: [
+        "Requires **Authorize** with a JWT whose user has `role: admin`.",
+        "Send at least one field in the JSON body (empty `{}` returns **400**).",
+        "Blank strings are stored as `null`.",
+      ].join(" "),
       parameters: lang,
       security: bearer,
-      requestBody: jsonBody("#/components/schemas/UpdateAppPublicSettingsBody", ""),
-      responses: std(),
+      requestBody: jsonBody(
+        "#/components/schemas/UpdateAppPublicSettingsBody",
+        "At least one property required.",
+        Ex.updateAppPublicSettingsExample
+      ),
+      responses: {
+        ...std(),
+        200: R.AppPublicSettings200Ok,
+      },
     },
   },
 

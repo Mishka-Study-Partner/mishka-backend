@@ -171,10 +171,29 @@ const savedMindMapDetailExample = {
   createdAt: "2026-05-08T09:00:00.000Z",
 };
 
+const appPublicSettingsExample = {
+  id: "default",
+  privacyPolicyText: "# Privacy Policy\n\nYour privacy matters to us.",
+  supportEmail: "support@mishka.app",
+  supportPhone: "+201234567890",
+  supportFacebookUrl: "https://facebook.com/mishka",
+  supportInstagramUrl: "https://instagram.com/mishka",
+  updatedAt: "2026-05-14T12:00:00.000Z",
+};
+
+const updateAppPublicSettingsExample = {
+  supportEmail: "support@mishka.app",
+  supportPhone: "+201234567890",
+  supportFacebookUrl: "https://facebook.com/mishka",
+  supportInstagramUrl: "https://instagram.com/mishka",
+};
+
 module.exports = {
   UUID,
   UUID2,
   exampleUser,
+  appPublicSettingsExample,
+  updateAppPublicSettingsExample,
   authDataExample,
   envelopeSuccess,
   envelopeError,

@@ -58,6 +58,12 @@ function errorEnvelope(httpLabel, title, detail, errorCode, detailsExample) {
 /** Standard success for GET/PUT/PATCH/DELETE and some POSTs returning 200. */
 const OkEnvelope = successEnvelope("200 OK", "Request succeeded; `data` may be an object, array, or primitive depending on the route.", Ex.listExample);
 
+const AppPublicSettings200Ok = successEnvelope(
+  "200 OK",
+  "Singleton app content: privacy policy + help & support contacts. All support fields may be `null` until an admin sets them via **PUT** (admin JWT).",
+  Ex.appPublicSettingsExample
+);
+
 /** Same envelope shape as 200; used when a resource is created (e.g. register, OAuth first sign-in, POST create). */
 const CreatedEnvelope = successEnvelope(
   "201 Created",
@@ -323,6 +329,7 @@ const SavedLibraryMindMap200Ok = successEnvelope(
 
 module.exports = {
   OkEnvelope,
+  AppPublicSettings200Ok,
   CreatedEnvelope,
   BadRequest,
   Unauthorized,

@@ -58,9 +58,30 @@ function buildErrorBody(err, req) {
   };
 }
 
+function isInvalidJsonBodyError(err) {
+  return (
+    err instanceof SyntaxError &&
+    (err.status === 400 || err.statusCode === 400) &&
+    "body" in err
+  );
+}
+
 function errorHandler(err, req, res, _next) {
   if (err instanceof HttpError) {
     return res.status(err.status).json(buildErrorBody(err, req));
+  }
+
+  if (isInvalidJsonBodyError(err)) {
+    const body = buildErrorBody(
+      new HttpError(400, "Invalid JSON in request body", undefined, "INVALID_JSON_BODY")
+    );
+    const showDetails =
+      process.env.NODE_ENV === "development" ||
+      String(process.env.SHOW_ERROR_DETAILS || "").toLowerCase() === "true";
+    if (showDetails) {
+      body.details = { developerMessage: err.message, errorName: "SyntaxError" };
+    }
+    return res.status(400).json(body);
   }
 
   if (err.code === "P2002") {

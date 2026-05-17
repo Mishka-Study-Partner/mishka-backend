@@ -1,8 +1,10 @@
 # Backend Update — For Flutter Team
 
-**Date:** May 13, 2026  
-**Version:** Profile, Tasks & Avatar release  
-**Deploy required:** Yes — redeploy on Railway + run `prisma migrate deploy`
+**Date:** May 13–14, 2026  
+**Version:** Profile, Tasks, Avatar + Study With Mishka fix  
+**Deploy required:** Yes — redeploy on Railway + run `npx prisma migrate deploy`
+
+**Study session 500 fix (detailed):** see [`STUDY_WITH_MISHKA_FIX_REPORT.md`](./STUDY_WITH_MISHKA_FIX_REPORT.md)
 
 ---
 
