@@ -142,6 +142,8 @@ All routes except `/`, `/openapi.json`, `/api-docs`, `/auth/send-signup-otp`, `/
 
 `username` is auto-regenerated when name fields change.
 
+**Education on profile:** same fields as signup (`educationStatus`, `schoolTrack`, `schoolGrade`, `universityYear`, `educationOtherDetail`). When you change any education field, send `educationStatus` plus the required sub-fields for that level. Switching level clears fields that no longer apply (e.g. school → university clears `schoolTrack` / `schoolGrade`).
+
 ### Profile photo
 
 - **`POST /auth/me/avatar`** — `multipart/form-data`, single field **`avatar`** (JPEG, PNG, WebP, or GIF; max 20 MB). Old avatar file is automatically deleted. Returns updated user with the new `profileImageUrl`. Set `AVATAR_BASE_URL` env var in production for the correct public URL.

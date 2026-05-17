@@ -122,6 +122,10 @@ const ERROR_MESSAGES = {
     en: "Daily usage reporting cap exceeded for this date",
     ar: "تم تجاوز الحد الأقصى لتسجيل وقت الاستخدام لهذا اليوم",
   },
+  STUDY_SESSION_START_FAILED: {
+    en: "Failed to start study session",
+    ar: "فشل بدء جلسة الدراسة",
+  },
 };
 
 function messagesForCode(code) {

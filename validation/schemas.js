@@ -1,4 +1,5 @@
 ﻿const { z } = require("zod");
+const { refineEducationFields } = require("../utils/educationProfile");
 
 /** Password: 8–20 chars, at least one upper, one lower, one special (non-alphanumeric). */
 const passwordPolicy = z
@@ -272,67 +273,20 @@ const updateMeSchema = z
         }
       }
     }
+    const touchesEdu =
+      data.educationStatus !== undefined ||
+      data.educationOtherDetail !== undefined ||
+      data.schoolTrack !== undefined ||
+      data.schoolGrade !== undefined ||
+      data.universityYear !== undefined;
+    if (touchesEdu && data.educationStatus) {
+      refineEducationFields(data, ctx);
+    }
   });
 
 /** @param {Record<string, unknown>} data @param {import("zod").RefinementCtx} ctx */
 function refineOAuthEducation(data, ctx) {
-  if (!data.educationStatus) return;
-  if (data.educationStatus === "other") {
-    const t = String(data.educationOtherDetail || "").trim();
-    if (!t) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "educationOtherDetail is required when educationStatus is other",
-        path: ["educationOtherDetail"],
-      });
-    }
-  }
-  if (data.educationStatus === "school") {
-    if (!data.schoolTrack) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "schoolTrack is required when educationStatus is school",
-        path: ["schoolTrack"],
-      });
-    }
-    if (data.schoolGrade == null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "schoolGrade (1–3) is required when educationStatus is school",
-        path: ["schoolGrade"],
-      });
-    }
-  }
-  if (data.educationStatus === "university") {
-    if (data.universityYear == null) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "universityYear (1–5) is required when educationStatus is university",
-        path: ["universityYear"],
-      });
-    }
-  }
-  if (data.educationStatus !== "school" && (data.schoolTrack != null || data.schoolGrade != null)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "schoolTrack and schoolGrade are only allowed when educationStatus is school",
-      path: ["schoolTrack"],
-    });
-  }
-  if (data.educationStatus !== "university" && data.universityYear != null) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "universityYear is only allowed when educationStatus is university",
-      path: ["universityYear"],
-    });
-  }
-  if (data.educationStatus !== "other" && data.educationOtherDetail != null && String(data.educationOtherDetail).trim() !== "") {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "educationOtherDetail is only used when educationStatus is other",
-      path: ["educationOtherDetail"],
-    });
-  }
+  refineEducationFields(data, ctx);
 }
 
 const oauthCommonShape = {

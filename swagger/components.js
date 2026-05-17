@@ -302,8 +302,12 @@ module.exports = {
         schoolGrade: { type: "integer", minimum: 1, maximum: 3, nullable: true },
         universityYear: { type: "integer", minimum: 1, maximum: 5, nullable: true },
       },
-      description:
-        "All fields are optional — send only what changed. At least one field must be present. Admin-only fields (`role`, `isVerified`) are not accepted here. `username` is auto-regenerated when name fields change.",
+      description: [
+        "All fields are optional — send only what changed. At least one field must be present.",
+        "Education (same rules as signup): when updating any education field, send **`educationStatus`** plus the fields for that level — `school` → `schoolTrack` + `schoolGrade`; `university` → `universityYear`; `other` → `educationOtherDetail`.",
+        "Changing `educationStatus` clears fields that do not apply to the new level.",
+        "Admin-only fields (`role`, `isVerified`) are not accepted. `username` auto-regenerates when name fields change.",
+      ].join(" "),
     },
     AppPublicSettingsData: {
       type: "object",

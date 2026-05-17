@@ -11,6 +11,13 @@ const {
   upsertOAuthUser,
 } = require("../services/oauthVerify");
 const { allocateUsername, ensureUsernameAssigned } = require("../utils/generateUsername");
+const {
+  EDUCATION_SELECT,
+  touchesEducation,
+  educationProfileSchema,
+  mergeEducationState,
+  educationToPrismaData,
+} = require("../utils/educationProfile");
 
 const SALT_ROUNDS = 10;
 
@@ -420,11 +427,27 @@ exports.updateMe = asyncHandler(async (req, res) => {
   if (body.gender !== undefined) data.gender = body.gender;
   if (body.profileImageUrl !== undefined) data.profileImageUrl = body.profileImageUrl;
   if (body.rememberMe !== undefined) data.rememberMe = body.rememberMe;
-  if (body.educationStatus !== undefined) data.educationStatus = body.educationStatus;
-  if (body.educationOtherDetail !== undefined) data.educationOtherDetail = body.educationOtherDetail;
-  if (body.schoolTrack !== undefined) data.schoolTrack = body.schoolTrack;
-  if (body.schoolGrade !== undefined) data.schoolGrade = body.schoolGrade;
-  if (body.universityYear !== undefined) data.universityYear = body.universityYear;
+
+  if (touchesEducation(body)) {
+    const current = await prisma.user.findUnique({
+      where: { id: userId },
+      select: EDUCATION_SELECT,
+    });
+    const merged = mergeEducationState(body, current);
+    if (!merged.educationStatus) {
+      throw new HttpError(
+        400,
+        "educationStatus is required when updating education fields",
+        undefined,
+        "VALIDATION_ERROR"
+      );
+    }
+    const eduResult = educationProfileSchema.safeParse(merged);
+    if (!eduResult.success) {
+      throw new HttpError(400, "Validation failed", eduResult.error.issues, "VALIDATION_ERROR");
+    }
+    Object.assign(data, educationToPrismaData(eduResult.data));
+  }
 
   if (body.fullName !== undefined) {
     data.fullName = body.fullName;

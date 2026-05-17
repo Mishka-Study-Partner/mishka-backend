@@ -295,13 +295,12 @@ const paths = {
       tags: ["Auth"],
       summary: "Update own profile",
       description:
-        "Requires `Authorization: Bearer <accessToken>`. Send only the fields that changed — at least one field is required. Admin-only fields (`role`, `isVerified`) cannot be set via this route. `username` is auto-regenerated when `firstName`, `lastName`, or `fullName` change. If the new `email` or `phoneNumber` is already taken, a `409 UNIQUE_VIOLATION` is returned.",
+        "Requires `Authorization: Bearer <accessToken>`. Send only the fields that changed — at least one field is required. Profile and **education** fields use the same `data.user` shape as `GET /auth/me`. When editing education, include `educationStatus` and the required sub-fields for that level (see `UpdateMeBody`). Admin-only fields (`role`, `isVerified`) cannot be set here. `409 UNIQUE_VIOLATION` if `email` or `phoneNumber` is taken.",
       parameters: lang,
       security: bearer,
       requestBody: jsonBody("#/components/schemas/UpdateMeBody", "", {
-        firstName: "Norhan",
-        lastName: "Mohamed",
-        gender: "female",
+        educationStatus: "university",
+        universityYear: 3,
       }),
       responses: {
         ...std({ 409: R.defaultError }),

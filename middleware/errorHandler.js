@@ -1,6 +1,16 @@
+const { Prisma } = require("@prisma/client");
 const { HttpError } = require("../utils/httpError");
 const { preferredLanguage } = require("../utils/locale");
 const { messagesForCode } = require("../utils/errorMessages");
+
+function prismaErrorDetails(err) {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) return null;
+  return {
+    prismaCode: err.code,
+    meta: err.meta ?? null,
+    developerMessage: err.message,
+  };
+}
 
 function buildErrorBody(err, req) {
   const lang = preferredLanguage(req);
@@ -63,9 +73,16 @@ function errorHandler(err, req, res, _next) {
 
   console.error(err);
   const body = buildErrorBody(err, req);
-  const isDev = process.env.NODE_ENV === "development" || process.env.SHOW_ERROR_DETAILS === "true";
-  if (isDev && err.message) {
-    body.details = body.details || { developerMessage: err.message, errorName: err.constructor?.name };
+  const showDetails =
+    process.env.NODE_ENV === "development" ||
+    String(process.env.SHOW_ERROR_DETAILS || "").toLowerCase() === "true";
+  if (showDetails) {
+    body.details =
+      body.details ||
+      prismaErrorDetails(err) || {
+        developerMessage: err.message,
+        errorName: err.constructor?.name,
+      };
   }
   return res.status(500).json(body);
 }

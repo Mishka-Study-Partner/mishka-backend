@@ -1,6 +1,7 @@
+const { Prisma } = require("@prisma/client");
 const prisma = require("../utils/prisma");
 const asyncHandler = require("../utils/asyncHandler");
-const { badRequest, notFound, forbidden } = require("../utils/httpError");
+const { badRequest, notFound, forbidden, HttpError } = require("../utils/httpError");
 const { normalizeTags } = require("../utils/studySessionMeta");
 const { recordDailyStreakActivity } = require("../services/dailyStreakService");
 const { getCatalog, flowtimeSuggestion } = require("../services/studyWithMishkaCatalog");
@@ -288,31 +289,53 @@ exports.startSession = asyncHandler(async (req, res) => {
   const plan = planFromPreset(body, presetRow);
 
   const now = new Date();
-  const row = await prisma.studyConcentrationSession.create({
-    data: {
-      userId: req.auth.sub,
-      customPresetId: presetRow?.id ?? null,
-      topLevelMode: body.topLevelMode,
-      concentrationPreset: plan.concentrationPreset,
-      status: "active",
-      phase: plan.phase,
-      title,
-      taskEstimatedMinutes: body.taskEstimatedMinutes ?? null,
-      focusMinutesPlanned: plan.focusMinutesPlanned,
-      shortBreakMinutesPlanned: plan.shortBreakMinutesPlanned,
-      longBreakMinutesPlanned: plan.longBreakMinutesPlanned,
-      cyclesTarget: plan.cyclesTarget,
-      pomodorosBeforeLongBreak: plan.pomodorosBeforeLongBreak,
-      pomodorosSinceLongBreak: 0,
-      cyclesCompleted: 0,
-      startedAt: now,
-      currentPhaseStartedAt: now,
-      ...(tags.length ? { tags } : {}),
-      ...(linkedTaskId ? { linkedTaskId } : {}),
-      ...(clientAppVersion ? { clientAppVersion } : {}),
-      ...(platform ? { platform } : {}),
-    },
-  });
+  let row;
+  try {
+    row = await prisma.studyConcentrationSession.create({
+      data: {
+        userId: req.auth.sub,
+        customPresetId: presetRow?.id ?? null,
+        topLevelMode: body.topLevelMode,
+        concentrationPreset: plan.concentrationPreset,
+        status: "active",
+        phase: plan.phase,
+        title,
+        taskEstimatedMinutes: body.taskEstimatedMinutes ?? null,
+        focusMinutesPlanned: plan.focusMinutesPlanned,
+        shortBreakMinutesPlanned: plan.shortBreakMinutesPlanned,
+        longBreakMinutesPlanned: plan.longBreakMinutesPlanned,
+        cyclesTarget: plan.cyclesTarget,
+        pomodorosBeforeLongBreak: plan.pomodorosBeforeLongBreak,
+        pomodorosSinceLongBreak: 0,
+        cyclesCompleted: 0,
+        startedAt: now,
+        currentPhaseStartedAt: now,
+        ...(tags.length ? { tags } : {}),
+        ...(linkedTaskId ? { linkedTaskId } : {}),
+        ...(clientAppVersion ? { clientAppVersion } : {}),
+        ...(platform ? { platform } : {}),
+      },
+    });
+  } catch (e) {
+    if (e instanceof Prisma.PrismaClientKnownRequestError) {
+      const showDetails = String(process.env.SHOW_ERROR_DETAILS || "").toLowerCase() === "true";
+      const hint =
+        e.code === "P2022" || /column/.test(String(e.message))
+          ? "Database schema may be out of date — run `npx prisma migrate deploy` on production."
+          : undefined;
+      throw new HttpError(
+        500,
+        "Failed to create study session",
+        showDetails
+          ? { step: "studyConcentrationSession.create", prismaCode: e.code, failureHint: hint, developerMessage: e.message }
+          : hint
+            ? { failureHint: hint }
+            : undefined,
+        "STUDY_SESSION_START_FAILED"
+      );
+    }
+    throw e;
+  }
 
   void recordDailyStreakActivity(req.auth.sub).catch((err) => console.error("[dailyStreak]", err?.message || err));
   res.apiCreated(enrichSession(row), "CREATED");
