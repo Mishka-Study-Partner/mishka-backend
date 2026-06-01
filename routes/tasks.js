@@ -1,11 +1,12 @@
 const express = require("express");
 const c = require("../controllers/taskController");
 const { validate } = require("../middleware/validateRequest");
-const { taskListQuerySchema } = require("../validation/schemas");
+const { taskListQuerySchema, taskCompletionsReportQuerySchema } = require("../validation/schemas");
 
 const router = express.Router();
 
 router.get("/", validate(taskListQuerySchema, "query"), c.list);
+router.get("/report/completions", validate(taskCompletionsReportQuerySchema, "query"), c.reportCompletions);
 router.get("/:id", c.getById);
 router.post("/", c.create);
 router.put("/:id", c.update);

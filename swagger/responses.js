@@ -281,8 +281,38 @@ const StudyReportsPaginated200Ok = successEnvelope(
 
 const StudyPeriodReport200Ok = successEnvelope(
   "200 OK",
-  `UTC rollup for day/week/month (**totals**, **sessionSummaries**, **userContext**). ${MishkaI18nTail}`,
+  `UTC rollup for day/week/month (**totals**, **sessionSummaries**, **userContext**). Omit or pass topLevelMode=all for Concentration + Camera combined. ${MishkaI18nTail}`,
   Ex.studyPeriodReportDataMinimal
+);
+
+const StudyYearReport200Ok = successEnvelope(
+  "200 OK",
+  `UTC year rollup: **monthlyBuckets** (12) + year **totals**; optional **topLevelMode** filter. ${MishkaI18nTail}`,
+  Ex.studyYearReportDataMinimal
+);
+
+const TaskCompletionsReport200Ok = successEnvelope(
+  "200 OK",
+  "Daily buckets of completed tasks by **completedAt** (UTC).",
+  Ex.taskCompletionsReportDataMinimal
+);
+
+const AiUsageReport200Ok = successEnvelope(
+  "200 OK",
+  "AI tutor material counts in date range (quizzes, flashcards, summaries, mindMaps).",
+  Ex.aiUsageReportDataMinimal
+);
+
+const DailyStreakHistory200Ok = successEnvelope(
+  "200 OK",
+  "Per-day streak states between from and to (UTC, max 366 days).",
+  Ex.dailyStreakHistoryDataMinimal
+);
+
+const StudyReportExport200Ok = successEnvelope(
+  "200 OK",
+  "PDF generated; download via pdfUrl (includes signed token) until expiresAt.",
+  Ex.studyReportExportDataMinimal
 );
 
 const StudyTelemetry200Ok = successEnvelope(
@@ -363,6 +393,11 @@ module.exports = {
   StudyFullReport200Ok,
   StudyReportsPaginated200Ok,
   StudyPeriodReport200Ok,
+  StudyYearReport200Ok,
+  TaskCompletionsReport200Ok,
+  AiUsageReport200Ok,
+  DailyStreakHistory200Ok,
+  StudyReportExport200Ok,
   StudyTelemetry200Ok,
   StudyMlReportCreated201Ok,
   StudyCheckInCreated201Ok,

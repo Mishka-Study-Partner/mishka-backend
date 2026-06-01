@@ -24,7 +24,11 @@
     "jose": "^5.9.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
+    "node-cron": "^4.1.0",
+    "nodemailer": "^7.0.3",
+    "pdfkit": "^0.17.2",
     "prisma": "^6.19.2",
+    "puppeteer": "^24.8.2",
     "swagger-ui-express": "^5.0.1",
     "zod": "^4.1.11"
   }

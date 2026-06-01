@@ -393,4 +393,69 @@ module.exports = {
       periodVsBaselineAvgPercent: 12.5,
     },
   },
+
+  studyYearReportDataMinimal: {
+    period: {
+      kind: "year",
+      label: "2026",
+      startUtc: "2026-01-01T00:00:00.000Z",
+      endUtc: "2027-01-01T00:00:00.000Z",
+    },
+    generatedAt: "2026-05-24T12:00:00.000Z",
+    filters: { topLevelMode: "all" },
+    totals: {
+      sessionsStarted: 48,
+      sumApproximateMainStudySeconds: 86400,
+      byTopLevelMode: { concentration: 30, call_with_mishka: 18 },
+    },
+    monthlyBuckets: [
+      {
+        label: "2026-01",
+        month: 1,
+        year: 2026,
+        totals: { sessionsStarted: 4, sumApproximateMainStudySeconds: 7200, byTopLevelMode: { concentration: 3, call_with_mishka: 1 } },
+      },
+    ],
+  },
+
+  taskCompletionsReportDataMinimal: {
+    periodStart: "2026-05-19T00:00:00.000Z",
+    periodEnd: "2026-05-27T00:00:00.000Z",
+    granularity: "day",
+    buckets: [
+      { label: "2026-05-19", completedCount: 2 },
+      { label: "2026-05-20", completedCount: 0 },
+    ],
+    totalCompleted: 2,
+  },
+
+  aiUsageReportDataMinimal: {
+    quizzes: 12,
+    flashcards: 8,
+    summaries: 5,
+    mindMaps: 3,
+    periodStart: "2026-05-01T00:00:00.000Z",
+    periodEnd: "2026-06-01T00:00:00.000Z",
+  },
+
+  dailyStreakHistoryDataMinimal: {
+    periodStart: "2026-05-01",
+    periodEnd: "2026-05-07",
+    currentStreak: 5,
+    longestStreak: 14,
+    freezesRemaining: 2,
+    days: [
+      { date: "2026-05-01", status: "completed", state: "past_done" },
+      { date: "2026-05-02", status: null, state: "past_missed" },
+    ],
+  },
+
+  studyReportExportDataMinimal: {
+    exportId: UUID,
+    pdfUrl: "https://mishka-backend-production.up.railway.app/study-with-mishka/reports/export/00000000-0000-4000-8000-000000000001?token=eyJhbG…",
+    expiresAt: "2026-06-06T12:00:00.000Z",
+    periodLabel: "Week of 2026-05-19 (UTC)",
+    delivery: "download",
+    emailedTo: null,
+  },
 };

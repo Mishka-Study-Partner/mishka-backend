@@ -170,6 +170,29 @@ async function useFreeze(userId, dateIso) {
 }
 
 /**
+ * @param {Date} d
+ * @param {Date} today
+ * @param {{ status?: string } | undefined} row
+ */
+function streakDayView(d, today, row) {
+  let state;
+  if (utcDateCompare(d, today) < 0) {
+    if (row?.status === "completed" || row?.status === "frozen") state = "past_done";
+    else state = "past_missed";
+  } else if (utcDateCompare(d, today) === 0) {
+    if (row?.status === "completed" || row?.status === "frozen") state = "today_done";
+    else state = "today_pending";
+  } else {
+    state = "upcoming";
+  }
+  return {
+    date: formatIsoDateUtc(d),
+    status: row?.status ?? null,
+    state,
+  };
+}
+
+/**
  * @param {string} userId
  * @param {string} [weekStartIso] Monday YYYY-MM-DD (UTC); defaults to current week
  */
@@ -198,23 +221,7 @@ async function getSummary(userId, weekStartIso) {
   const week = [];
   for (let i = 0; i < 7; i += 1) {
     const d = addUtcDays(weekStart, i);
-    const key = formatIsoDateUtc(d);
-    const row = byDate.get(key);
-    let state;
-    if (utcDateCompare(d, today) < 0) {
-      if (row?.status === "completed" || row?.status === "frozen") state = "past_done";
-      else state = "past_missed";
-    } else if (utcDateCompare(d, today) === 0) {
-      if (row?.status === "completed" || row?.status === "frozen") state = "today_done";
-      else state = "today_pending";
-    } else {
-      state = "upcoming";
-    }
-    week.push({
-      date: key,
-      status: row?.status ?? null,
-      state,
-    });
+    week.push(streakDayView(d, today, byDate.get(formatIsoDateUtc(d))));
   }
 
   const currentStreak = meta?.currentStreak ?? 0;
@@ -231,11 +238,60 @@ async function getSummary(userId, weekStartIso) {
   };
 }
 
+const MAX_HISTORY_DAYS = 366;
+
+/**
+ * Per-day streak states for Your Report monthly/yearly charts.
+ * @param {string} userId
+ * @param {string} fromIso YYYY-MM-DD inclusive (UTC)
+ * @param {string} toIso YYYY-MM-DD inclusive (UTC)
+ */
+async function getHistory(userId, fromIso, toIso) {
+  const from = parseIsoDateUtc(fromIso);
+  const to = parseIsoDateUtc(toIso);
+  if (!from || !to) {
+    throw badRequest("from and to must be YYYY-MM-DD", undefined, "VALIDATION_ERROR");
+  }
+  if (utcDateCompare(from, to) > 0) {
+    throw badRequest("from must be on or before to", undefined, "VALIDATION_ERROR");
+  }
+  const spanDays = Math.floor((to.getTime() - from.getTime()) / 86400000) + 1;
+  if (spanDays > MAX_HISTORY_DAYS) {
+    throw badRequest(`Date range cannot exceed ${MAX_HISTORY_DAYS} days`, undefined, "VALIDATION_ERROR");
+  }
+
+  const today = utcTodayDate();
+  const [rows, meta] = await Promise.all([
+    prisma.userStreak.findMany({
+      where: { userId, date: { gte: from, lte: to } },
+    }),
+    prisma.userDailyStreakMeta.findUnique({ where: { userId } }),
+  ]);
+
+  const byDate = new Map(rows.map((r) => [formatIsoDateUtc(r.date), r]));
+  const days = [];
+  for (let d = new Date(from.getTime()); utcDateCompare(d, to) <= 0; d = addUtcDays(d, 1)) {
+    days.push(streakDayView(d, today, byDate.get(formatIsoDateUtc(d))));
+  }
+
+  return {
+    periodStart: formatIsoDateUtc(from),
+    periodEnd: formatIsoDateUtc(to),
+    currentStreak: meta?.currentStreak ?? 0,
+    longestStreak: meta?.longestStreak ?? 0,
+    freezesRemaining: meta?.freezesRemaining ?? 2,
+    days,
+  };
+}
+
 module.exports = {
   recordDailyStreakActivity,
   useFreeze,
   getSummary,
+  getHistory,
   utcTodayDate,
   formatIsoDateUtc,
   mondayUtcOfWeekContaining,
+  parseIsoDateUtc,
+  addUtcDays,
 };

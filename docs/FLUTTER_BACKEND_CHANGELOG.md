@@ -1,10 +1,74 @@
 # Backend Update — For Flutter Team
 
-**Date:** May 13–14, 2026  
-**Version:** Profile, Tasks, Avatar + Study With Mishka fix  
+**Date:** May 13–30, 2026  
+**Latest:** Your Report — full backend (P0 + P1 + P2)  
 **Deploy required:** Yes — redeploy on Railway + run `npx prisma migrate deploy`
 
-**Study session 500 fix (detailed):** see [`STUDY_WITH_MISHKA_FIX_REPORT.md`](./STUDY_WITH_MISHKA_FIX_REPORT.md)
+### Start here (Your Report)
+
+**[`FLUTTER_YOUR_REPORT_HANDOFF.md`](./FLUTTER_YOUR_REPORT_HANDOFF.md)** — complete handoff: migration checklist, all endpoints, PDF/email, auto-report toggle, what to remove from the app.
+
+**Also:** [`YOUR_REPORT_BACKEND.md`](./YOUR_REPORT_BACKEND.md) (API details) · [`YOUR_REPORT_PDF_SERVER_SPEC.md`](./YOUR_REPORT_PDF_SERVER_SPEC.md) (PDF layout) · [`STUDY_WITH_MISHKA_FIX_REPORT.md`](./STUDY_WITH_MISHKA_FIX_REPORT.md) (session 500)
+
+---
+
+## Your Report P2 (May 30, 2026)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/reports/your-report?format=bundle` | **One call** — study, streak, AI, tasks, community (default) |
+| `GET` | `/reports/your-report?format=payload` | Detailed shape for PDF renderer |
+| `GET` | `/communities/activity/report` | Community activity only |
+
+---
+
+## Automatic report email opt-in (May 30, 2026)
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/user-preferences/me` | Read `reportEmailAutoEnabled`, `reportEmailFrequency`, `reportEmailLocale` |
+| `PATCH` | `/user-preferences/me` | Enable (`weekly`/`monthly`) or disable auto email |
+| `POST` | `/internal/cron/scheduled-report-emails` | Cron hook (header `X-Cron-Secret`) |
+
+Migration `20260530180000_report_email_auto_prefs`. Configure `CRON_SECRET` + SMTP on Railway.
+
+---
+
+## Your Report — visual PDF (May 30, 2026)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /reports/your-report` | JSON payload for charts (Flutter parity / debug) |
+| `POST /reports/your-report/export` | Puppeteer PDF matching on-screen layout + email attachment |
+| `GET /reports/your-report/export/{reportId}?token=` | Download PDF |
+
+See [`YOUR_REPORT_PDF_SERVER_SPEC.md`](./YOUR_REPORT_PDF_SERVER_SPEC.md). Copy logo to `assets/reports/`. Deploy needs Puppeteer + SMTP for email.
+
+---
+
+## Your Report P1 (May 30, 2026)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /daily-streaks/history?from=&to=` | Per-day streak states for monthly/yearly report charts |
+| `POST /study-with-mishka/reports/export` | Generate PDF; optional `delivery: "email"` |
+| `GET /study-with-mishka/reports/export/{exportId}?token=` | Download PDF (signed link from email or `pdfUrl`) |
+
+Configure SMTP on Railway for email delivery (see `.env.example`).
+
+---
+
+## Your Report P0 (May 30, 2026)
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /study-with-mishka/reports/{day\|week\|month}?topLevelMode=all` | Combined Concentration + Camera study time (or omit `topLevelMode`) |
+| `GET /study-with-mishka/reports/year?year=2026` | 12 monthly buckets in one call |
+| `GET /user-ai-activity/report?from=&to=` | Quizzes / flashcards / summaries / mindMaps counts |
+| `GET /tasks/report/completions?from=&to=` | Tasks completed per UTC day |
+| `PATCH /tasks/{id}` `{ "status": "completed" }` | Sets **`completedAt`** automatically |
+
+Migration **`20260530120000_task_completed_at`** adds `tasks.completed_at`.
 
 ---
 
@@ -311,14 +375,25 @@ These were mentioned in the audit but already exist:
 
 | Method | Path | Purpose |
 |--------|------|---------|
+| `GET` | `/reports/your-report` | **Unified Your Report screen** (`format=bundle` default) |
+| `POST` | `/reports/your-report/export` | Visual PDF + email (`delivery`) |
+| `GET` | `/reports/your-report/export/{reportId}` | Download PDF (`?token=`) |
+| `GET` | `/communities/activity/report` | Community activity metrics |
+| `GET` | `/user-preferences/me` | Auto report email settings |
+| `PATCH` | `/user-preferences/me` | Enable/disable weekly/monthly auto email |
 | `PATCH` | `/auth/me` | Update own profile (partial) |
 | `POST` | `/auth/me/avatar` | Upload profile photo |
 | `DELETE` | `/auth/me/avatar` | Remove profile photo |
 | `POST` | `/tasks` | Create task (listId now optional) |
-| `PATCH` | `/tasks/{id}` | Update task (partial) |
-| `DELETE` | `/tasks/{id}` | Delete task (already existed) |
+| `PATCH` | `/tasks/{id}` | Update task (partial); `completedAt` on complete |
+| `GET` | `/tasks/report/completions` | Task completion buckets |
+| `GET` | `/study-with-mishka/reports/year` | Yearly study (12 months, both modes) |
+| `GET` | `/study-with-mishka/reports/{day,week,month}` | Study rollup (`topLevelMode=all`) |
+| `GET` | `/user-ai-activity/report` | AI tool usage counts |
+| `GET` | `/daily-streaks/history` | Streak history (max 366 days) |
+| `POST` | `/study-with-mishka/reports/export` | Legacy simple PDF (prefer your-report export) |
+| `DELETE` | `/tasks/{id}` | Delete task |
 | `PATCH` | `/todo-lists/{id}` | Update list (partial) |
-| `DELETE` | `/todo-lists/{id}` | Delete list (already existed) |
 
 ---
 
@@ -327,8 +402,9 @@ These were mentioned in the audit but already exist:
 1. Pull latest backend code
 2. On Railway, redeploy the backend service
 3. Run database migration: `npx prisma migrate deploy`  
-   (This makes `list_id` nullable in the tasks table)
-4. Verify in Swagger (`/api-docs`) that the new endpoints appear
+   (includes `tasks.completed_at`, `tasks.list_id` optional, report email prefs)
+4. Configure SMTP + `REPORT_EXPORT_BASE_URL` + `CRON_SECRET` if using email / auto reports
+5. Verify in Swagger (`/api-docs`) that the new endpoints appear
 
 ---
 
@@ -344,6 +420,8 @@ Set this on Railway if avatar URLs need a specific domain (e.g. `https://mishka-
 
 ## Notes for Flutter
 
+- **Your Report:** follow [`FLUTTER_YOUR_REPORT_HANDOFF.md`](./FLUTTER_YOUR_REPORT_HANDOFF.md) first
 - `/auth/send-signup-otp` is hardcoded in `auth_remote_data_source.dart` — consider moving to `ApiEndpoints` for consistency
-- The `taskActionsComingSoon` localized string can now be removed — task actions are fully functional
-- All new endpoints are documented in Swagger (`/api-docs`) with full schemas and try-it-out
+- Remove `taskActionsComingSoon` — task actions are fully functional
+- Replace local PDF + parallel report fetches per handoff doc
+- All endpoints documented in Swagger (`/api-docs`)

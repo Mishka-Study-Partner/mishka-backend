@@ -11,6 +11,7 @@ const {
   studyTelemetryBatchSchema,
   studyMlReportSchema,
   studyCallBreakEndSchema,
+  studyReportExportSchema,
 } = require("../validation/schemas");
 
 const router = express.Router();
@@ -26,6 +27,8 @@ router.get("/reports", c.listReports);
 router.get("/reports/day", c.getReportDay);
 router.get("/reports/week", c.getReportWeek);
 router.get("/reports/month", c.getReportMonth);
+router.get("/reports/year", c.getReportYear);
+router.post("/reports/export", validate(studyReportExportSchema), c.exportReport);
 
 router.get("/sessions", c.listSessions);
 router.post("/sessions/start", validate(studyWithMishkaStartSchema), c.startSession);

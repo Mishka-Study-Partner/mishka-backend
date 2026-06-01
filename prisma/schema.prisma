@@ -42,6 +42,11 @@ enum TaskPriority {
   high
 }
 
+enum ReportEmailFrequency {
+  weekly
+  monthly
+}
+
 enum TaskKind {
   online
   offline
@@ -205,6 +210,12 @@ model UserPreference {
   language               String   @default("English") @db.VarChar(50)
   theme                  String   @default("light") @db.VarChar(20)
   notificationsEnabled   Boolean  @default(true) @map("notifications_enabled")
+  /// When true, server emails Your Report PDF on schedule (`reportEmailFrequency`).
+  reportEmailAutoEnabled Boolean  @default(false) @map("report_email_auto_enabled")
+  reportEmailFrequency ReportEmailFrequency? @map("report_email_frequency")
+  reportEmailLocale    String   @default("en") @map("report_email_locale") @db.VarChar(5)
+  reportEmailLastSentAt DateTime? @map("report_email_last_sent_at")
+  reportEmailLastPeriodKey String? @map("report_email_last_period_key") @db.VarChar(32)
   updatedAt              DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -898,6 +909,8 @@ model Task {
   status      TaskStatus   @default(pending)
   priority    TaskPriority @default(medium)
   taskType    TaskKind?    @map("task_type")
+  /// Set when status becomes `completed`; cleared when reopened.
+  completedAt DateTime?    @map("completed_at")
   createdAt   DateTime     @default(now()) @map("created_at")
   updatedAt   DateTime     @updatedAt @map("updated_at")
 

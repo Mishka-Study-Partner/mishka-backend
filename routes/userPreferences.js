@@ -1,7 +1,12 @@
 const express = require("express");
 const c = require("../controllers/userPreferenceController");
+const { validate } = require("../middleware/validateRequest");
+const { userPreferenceReportEmailSchema } = require("../validation/schemas");
 
 const router = express.Router();
+
+router.get("/me", c.getMe);
+router.patch("/me", validate(userPreferenceReportEmailSchema), c.patchMe);
 
 router.get("/", c.list);
 router.get("/:id", c.getById);

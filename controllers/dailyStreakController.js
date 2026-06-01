@@ -1,9 +1,14 @@
 const asyncHandler = require("../utils/asyncHandler");
-const { getSummary, recordDailyStreakActivity, useFreeze } = require("../services/dailyStreakService");
+const { getSummary, getHistory, recordDailyStreakActivity, useFreeze } = require("../services/dailyStreakService");
 
 exports.getSummary = asyncHandler(async (req, res) => {
   const weekStart = typeof req.query.weekStart === "string" ? req.query.weekStart : undefined;
   const data = await getSummary(req.auth.sub, weekStart);
+  res.apiSuccess(data, "OK", 200);
+});
+
+exports.getHistory = asyncHandler(async (req, res) => {
+  const data = await getHistory(req.auth.sub, req.query.from, req.query.to);
   res.apiSuccess(data, "OK", 200);
 });
 

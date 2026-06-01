@@ -772,6 +772,172 @@ const taskListQuerySchema = z
     }
   });
 
+const utcDateQuery = z.preprocess(
+  emptyQueryToUndefined,
+  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD (UTC)")
+);
+
+/** GET /tasks/report/completions — completed tasks bucketed by `completedAt` (UTC days). */
+const taskCompletionsReportQuerySchema = z
+  .object({
+    from: utcDateQuery,
+    to: utcDateQuery,
+    granularity: z.enum(["day"]).optional().default("day"),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.from && data.to && data.from > data.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "from must be on or before to",
+        path: ["to"],
+      });
+    }
+  });
+
+/** GET /daily-streaks/history — per-day streak states for a UTC date range. */
+const dailyStreakHistoryQuerySchema = z
+  .object({
+    from: utcDateQuery,
+    to: utcDateQuery,
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.from && data.to && data.from > data.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "from must be on or before to",
+        path: ["to"],
+      });
+    }
+  });
+
+/** GET /reports/your-report — JSON payload for PDF / Flutter parity. */
+const yourReportQuerySchema = z
+  .object({
+    period: z.enum(["daily", "weekly", "monthly", "yearly"]).optional().default("weekly"),
+    anchorDate: z.preprocess(emptyQueryToUndefined, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
+    date: z.preprocess(emptyQueryToUndefined, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
+    locale: z.enum(["en", "ar"]).optional(),
+    format: z.enum(["bundle", "payload"]).optional().default("bundle"),
+    includeCommunity: z
+      .union([z.boolean(), z.literal("true"), z.literal("false")])
+      .optional()
+      .transform((v) => v !== false && v !== "false"),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (!data.anchorDate && !data.date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "date or anchorDate is required",
+        path: ["date"],
+      });
+    }
+  })
+  .transform((data) => ({
+    period: data.period,
+    anchorDate: data.anchorDate || data.date,
+    locale: data.locale,
+    format: data.format,
+    includeCommunity: data.includeCommunity,
+  }));
+
+/** GET /communities/activity/report */
+const communityActivityReportQuerySchema = yourReportQuerySchema;
+
+/** PATCH /user-preferences/me — automatic Your Report email (weekly / monthly). */
+const userPreferenceReportEmailSchema = z
+  .object({
+    reportEmailAutoEnabled: z.boolean().optional(),
+    reportEmailFrequency: z.enum(["weekly", "monthly"]).nullable().optional(),
+    reportEmailLocale: z.enum(["en", "ar"]).optional(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.reportEmailAutoEnabled === true && !data.reportEmailFrequency) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "reportEmailFrequency is required when reportEmailAutoEnabled is true",
+        path: ["reportEmailFrequency"],
+      });
+    }
+  });
+
+const cronScheduledReportsSchema = z
+  .object({
+    dryRun: z.boolean().optional(),
+    force: z.enum(["weekly", "monthly"]).optional(),
+  })
+  .strict();
+
+/** POST /reports/your-report/export — visual PDF (Puppeteer) + optional email. */
+const yourReportExportSchema = z
+  .object({
+    period: z.enum(["weekly", "monthly", "yearly"]),
+    anchorDate: utcDateQuery,
+    locale: z.enum(["en", "ar"]).optional().default("en"),
+    delivery: z.enum(["email", "download", "both"]).optional().default("download"),
+    timezone: z.string().max(64).optional(),
+  })
+  .strict();
+
+/** POST /study-with-mishka/reports/export — legacy simple PDF (pdfkit). */
+const studyReportExportSchema = z
+  .object({
+    period: z.enum(["daily", "weekly", "monthly", "yearly"]),
+    date: z.preprocess(emptyQueryToUndefined, z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()),
+    year: z.coerce.number().int().min(2000).max(2100).optional(),
+    month: z.coerce.number().int().min(1).max(12).optional(),
+    delivery: z.enum(["download", "email"]).optional().default("download"),
+    topLevelMode: z.enum(["concentration", "call_with_mishka", "all"]).optional(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.period === "daily" || data.period === "weekly") {
+      if (!data.date) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "date (YYYY-MM-DD) is required for daily and weekly exports",
+          path: ["date"],
+        });
+      }
+    }
+    if (data.period === "monthly") {
+      if (data.year == null || data.month == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "year and month are required for monthly exports",
+          path: ["year"],
+        });
+      }
+    }
+    if (data.period === "yearly" && data.year == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "year is required for yearly exports",
+        path: ["year"],
+      });
+    }
+  });
+
+/** GET /user-ai-activity/report — AI material counts in inclusive UTC date range. */
+const aiUsageReportQuerySchema = z
+  .object({
+    from: utcDateQuery,
+    to: utcDateQuery,
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.from && data.to && data.from > data.to) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "from must be on or before to",
+        path: ["to"],
+      });
+    }
+  });
+
 /** GET /todo-lists, GET /users/:id/todo-lists */
 const todoListQuerySchema = z
   .object({
@@ -834,5 +1000,14 @@ module.exports = {
   studyCallBreakEndSchema,
   updateMeSchema,
   taskListQuerySchema,
+  taskCompletionsReportQuerySchema,
+  dailyStreakHistoryQuerySchema,
+  yourReportQuerySchema,
+  communityActivityReportQuerySchema,
+  yourReportExportSchema,
+  userPreferenceReportEmailSchema,
+  cronScheduledReportsSchema,
+  studyReportExportSchema,
+  aiUsageReportQuerySchema,
   todoListQuerySchema,
 };

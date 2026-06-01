@@ -426,6 +426,29 @@ module.exports = {
         },
       },
     },
+    UserPreferenceReportEmailBody: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        reportEmailAutoEnabled: { type: "boolean" },
+        reportEmailFrequency: { type: "string", enum: ["weekly", "monthly"], nullable: true },
+        reportEmailLocale: { type: "string", enum: ["en", "ar"] },
+      },
+      example: { reportEmailAutoEnabled: true, reportEmailFrequency: "weekly", reportEmailLocale: "en" },
+    },
+    StudyReportExportBody: {
+      type: "object",
+      additionalProperties: false,
+      required: ["period", "anchorDate"],
+      properties: {
+        period: { type: "string", enum: ["weekly", "monthly", "yearly"] },
+        anchorDate: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
+        locale: { type: "string", enum: ["en", "ar"], default: "en" },
+        delivery: { type: "string", enum: ["download", "email", "both"], default: "download" },
+        timezone: { type: "string", example: "Africa/Cairo" },
+      },
+      example: { period: "weekly", anchorDate: "2026-05-24", locale: "en", delivery: "email" },
+    },
     UsageSegmentItem: {
       type: "object",
       additionalProperties: false,

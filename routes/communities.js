@@ -13,9 +13,12 @@ const {
   communityAddMemberSchema,
   communityMemberRoleSchema,
   communityChannelMessageCreateSchema,
+  communityActivityReportQuerySchema,
 } = require("../validation/schemas");
 
 const router = express.Router();
+
+router.get("/activity/report", validate(communityActivityReportQuerySchema, "query"), c.activityReport);
 
 router.post("/join", validate(communityJoinSchema), c.join);
 router.get("/", c.list);

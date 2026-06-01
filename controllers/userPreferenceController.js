@@ -1,6 +1,11 @@
 const prisma = require("../utils/prisma");
 const asyncHandler = require("../utils/asyncHandler");
 const { createCrudHandlers } = require("../utils/prismaCrud");
+const {
+  mapReportEmailSettings,
+  ensureUserPreference,
+  buildReportEmailPreferenceUpdate,
+} = require("../utils/userPreferenceReportEmail");
 
 const crud = createCrudHandlers("userPreference", { ownership: { userIdField: "userId" } });
 
@@ -9,3 +14,38 @@ exports.getById = asyncHandler(crud.getById);
 exports.create = asyncHandler(crud.create);
 exports.update = asyncHandler(crud.update);
 exports.remove = asyncHandler(crud.remove);
+
+/** GET /user-preferences/me — includes automatic report email settings. */
+exports.getMe = asyncHandler(async (req, res) => {
+  const pref = await ensureUserPreference(req.auth.sub);
+  res.apiSuccess(
+    {
+      ...pref,
+      reportEmail: mapReportEmailSettings(pref),
+    },
+    "OK",
+    200
+  );
+});
+
+/** PATCH /user-preferences/me — enable/disable scheduled Your Report emails. */
+exports.patchMe = asyncHandler(async (req, res) => {
+  await ensureUserPreference(req.auth.sub);
+  const data = buildReportEmailPreferenceUpdate(req.body);
+  if (!Object.keys(data).length) {
+    const pref = await prisma.userPreference.findUnique({ where: { userId: req.auth.sub } });
+    return res.apiSuccess({ ...pref, reportEmail: mapReportEmailSettings(pref) }, "OK", 200);
+  }
+  const pref = await prisma.userPreference.update({
+    where: { userId: req.auth.sub },
+    data,
+  });
+  res.apiSuccess(
+    {
+      ...pref,
+      reportEmail: mapReportEmailSettings(pref),
+    },
+    "OK",
+    200
+  );
+});

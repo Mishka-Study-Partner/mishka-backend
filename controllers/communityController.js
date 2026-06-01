@@ -10,6 +10,7 @@ const {
   assertOwnerOrAdmin,
   assertMember,
 } = require("../services/communityAuthz");
+const { buildCommunityActivityReport } = require("../services/communityActivityReportService");
 
 function randomInviteCode() {
   return crypto.randomBytes(5).toString("hex").slice(0, 10);
@@ -466,4 +467,16 @@ exports.leaveChannel = asyncHandler(async (req, res) => {
     throw e;
   }
   res.apiSuccess({ left: true }, "OK", 200);
+});
+
+/** GET /communities/activity/report — Your Report community metrics. */
+exports.activityReport = asyncHandler(async (req, res) => {
+  const { period, anchorDate, locale } = req.query;
+  const data = await buildCommunityActivityReport(
+    req.auth.sub,
+    period,
+    anchorDate,
+    locale === "ar" ? "ar" : "en"
+  );
+  res.apiSuccess(data, "OK", 200);
 });

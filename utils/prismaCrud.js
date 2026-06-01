@@ -90,7 +90,7 @@ function createCrudHandlers(delegate, options = {}) {
       if (ownership) assertOwnedOrAdmin(req, existing, userIdField);
       else if (!existing) throw notFound();
 
-      const data = options.mapUpdate ? options.mapUpdate(req.body) : { ...req.body };
+      const data = options.mapUpdate ? options.mapUpdate(req.body, existing) : { ...req.body };
       if (!data || typeof data !== "object" || Object.keys(data).length === 0) {
         throw badRequest("No fields to update", undefined, "VALIDATION_ERROR");
       }

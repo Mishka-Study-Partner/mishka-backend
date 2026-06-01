@@ -11,7 +11,16 @@ const {
   reportForDay,
   reportForWeek,
   reportForMonth,
+  reportForYear,
 } = require("../services/studyPeriodReportService");
+const { parseReportTopLevelMode } = require("../utils/studyReportMode");
+const { createExport, resolveExportAccess, pdfPath: exportPdfPath } = require("../services/studyReportExportService");
+const fs = require("fs");
+
+function studyReportOptions(req) {
+  const { mode, explicitAll } = parseReportTopLevelMode(req.query.topLevelMode);
+  return { topLevelMode: mode, explicitAll };
+}
 
 function catalogMode(id) {
   const cat = getCatalog();
@@ -94,10 +103,7 @@ exports.getReportDay = asyncHandler(async (req, res) => {
   if (!dateStr || typeof dateStr !== "string") {
     throw badRequest("Query date=YYYY-MM-DD (UTC) is required", undefined, "VALIDATION_ERROR");
   }
-  const mode = req.query.topLevelMode;
-  const report = await reportForDay(req.auth.sub, dateStr, {
-    topLevelMode: mode === "call_with_mishka" || mode === "concentration" ? mode : undefined,
-  });
+  const report = await reportForDay(req.auth.sub, dateStr, studyReportOptions(req));
   if (!report) throw badRequest("Invalid date", undefined, "VALIDATION_ERROR");
   res.apiSuccess(report, "OK", 200);
 });
@@ -107,10 +113,7 @@ exports.getReportWeek = asyncHandler(async (req, res) => {
   if (!dateStr || typeof dateStr !== "string") {
     throw badRequest("Query date=YYYY-MM-DD (UTC week containing this date)", undefined, "VALIDATION_ERROR");
   }
-  const mode = req.query.topLevelMode;
-  const report = await reportForWeek(req.auth.sub, dateStr, {
-    topLevelMode: mode === "call_with_mishka" || mode === "concentration" ? mode : undefined,
-  });
+  const report = await reportForWeek(req.auth.sub, dateStr, studyReportOptions(req));
   if (!report) throw badRequest("Invalid date", undefined, "VALIDATION_ERROR");
   res.apiSuccess(report, "OK", 200);
 });
@@ -118,12 +121,34 @@ exports.getReportWeek = asyncHandler(async (req, res) => {
 exports.getReportMonth = asyncHandler(async (req, res) => {
   const year = req.query.year;
   const month = req.query.month;
-  const mode = req.query.topLevelMode;
-  const report = await reportForMonth(req.auth.sub, year, month, {
-    topLevelMode: mode === "call_with_mishka" || mode === "concentration" ? mode : undefined,
-  });
+  const report = await reportForMonth(req.auth.sub, year, month, studyReportOptions(req));
   if (!report) throw badRequest("Invalid year/month", undefined, "VALIDATION_ERROR");
   res.apiSuccess(report, "OK", 200);
+});
+
+exports.getReportYear = asyncHandler(async (req, res) => {
+  const year = req.query.year;
+  const report = await reportForYear(req.auth.sub, year, studyReportOptions(req));
+  if (!report) throw badRequest("Invalid year (2000–2100)", undefined, "VALIDATION_ERROR");
+  res.apiSuccess(report, "OK", 200);
+});
+
+exports.exportReport = asyncHandler(async (req, res) => {
+  const data = await createExport(req);
+  res.apiSuccess(data, "OK", 200);
+});
+
+/** Public download when `?token=` is valid; also allowed with Bearer JWT for same user. */
+exports.downloadReport = asyncHandler(async (req, res) => {
+  const { userId, exportId, meta } = await resolveExportAccess(req);
+  const file = exportPdfPath(userId, exportId);
+  if (!fs.existsSync(file)) throw notFound("Export file missing", "NOT_FOUND");
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="mishka-report-${meta.period || "export"}.pdf"`
+  );
+  fs.createReadStream(file).pipe(res);
 });
 
 exports.listReports = asyncHandler(async (req, res) => {

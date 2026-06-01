@@ -11,7 +11,12 @@ const { validate } = require("./middleware/validateRequest");
 const { requireAdmin } = require("./middleware/authorize");
 const legacyAi = require("./controllers/legacyAiController");
 const appPublicSettings = require("./controllers/appPublicSettingsController");
-const { aiChatSchema, aiGenerateToolsSchema, updateAppPublicSettingsSchema } = require("./validation/schemas");
+const {
+  aiChatSchema,
+  aiGenerateToolsSchema,
+  updateAppPublicSettingsSchema,
+  cronScheduledReportsSchema,
+} = require("./validation/schemas");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -71,6 +76,20 @@ app.post("/upload", requireAuth, upload.single("file"), legacyAi.upload);
 app.post("/chat", requireAuth, validate(aiChatSchema), legacyAi.chat);
 app.post("/generate-tools", requireAuth, validate(aiGenerateToolsSchema), legacyAi.generateTools);
 
+const studyWithMishka = require("./controllers/studyWithMishkaController");
+const yourReport = require("./controllers/yourReportController");
+const internalCron = require("./controllers/internalCronController");
+const requireCronSecret = require("./middleware/requireCronSecret");
+
+app.get("/study-with-mishka/reports/export/:exportId", studyWithMishka.downloadReport);
+app.get("/reports/your-report/export/:reportId", yourReport.downloadReport);
+app.post(
+  "/internal/cron/scheduled-report-emails",
+  requireCronSecret,
+  validate(cronScheduledReportsSchema),
+  internalCron.scheduledReportEmails
+);
+
 app.use(requireAuth);
 app.put("/public/app-settings", requireAdmin, validate(updateAppPublicSettingsSchema), appPublicSettings.put);
 app.use("/users", require("./routes/users"));
@@ -81,6 +100,7 @@ app.use("/tips", require("./routes/tips"));
 app.use("/user-streaks", require("./routes/userStreaks"));
 app.use("/ai-tools", require("./routes/aiTools"));
 app.use("/study-with-mishka", require("./routes/studyWithMishka"));
+app.use("/reports", require("./routes/reports"));
 app.use("/communities", require("./routes/communities"));
 app.use("/user-communities", require("./routes/userCommunities"));
 app.use("/categories", require("./routes/categories"));
@@ -116,4 +136,23 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Mishka backend listening on http://localhost:${PORT}`);
+
+  if (process.env.ENABLE_IN_PROCESS_REPORT_CRON === "true") {
+    try {
+      const cron = require("node-cron");
+      const { runScheduledReportEmails } = require("./services/scheduledReportEmailJob");
+      cron.schedule(
+        "0 8 * * *",
+        () => {
+          runScheduledReportEmails().catch((err) => {
+            console.error("[cron] scheduled-report-emails", err?.message || err);
+          });
+        },
+        { timezone: "UTC" }
+      );
+      console.log("[cron] In-process report email job scheduled (08:00 UTC daily)");
+    } catch (err) {
+      console.error("[cron] Failed to start in-process scheduler", err?.message || err);
+    }
+  }
 });

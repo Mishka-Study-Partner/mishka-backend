@@ -868,6 +868,23 @@ const paths = {
       responses: std({ 201: R.CreatedEnvelope }),
     },
   },
+  "/communities/activity/report": {
+    get: {
+      tags: ["Communities"],
+      summary: "Community activity report (Your Report)",
+      description:
+        "User's messages posted, material shares, and channel joins in the UTC period. Buckets match report period (week days, month days, or year months).",
+      parameters: [
+        ...lang,
+        { name: "period", in: "query", schema: { type: "string", enum: ["daily", "weekly", "monthly", "yearly"] } },
+        { name: "date", in: "query", required: true, schema: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" } },
+        { name: "locale", in: "query", schema: { type: "string", enum: ["en", "ar"] } },
+      ],
+      security: bearer,
+      responses: std(),
+    },
+  },
+
   "/communities": {
     get: {
       tags: ["Communities"],
@@ -1402,6 +1419,94 @@ const paths = {
       security: bearer,
       requestBody: jsonBody("#/components/schemas/JsonRecord", "", { title: "Buy groceries", dueDate: "2026-06-01", priority: "high" }),
       responses: std({ 201: R.CreatedEnvelope }),
+    },
+  },
+  "/reports/your-report": {
+    get: {
+      tags: ["Reports"],
+      summary: "Your Report unified bundle (one screen load)",
+      description: [
+        "**Default `format=bundle`:** `periodLabel`, `study`, `aiTools`, `streak`, `tasksCompleted`, `community` — zeros allowed (no 422).",
+        "**`format=payload`:** detailed PDF renderer shape (may 422 if no data).",
+        "Query `date` or `anchorDate` (YYYY-MM-DD). `includeCommunity=false` skips community queries.",
+      ].join(" "),
+      parameters: [
+        ...lang,
+        { name: "period", in: "query", schema: { type: "string", enum: ["daily", "weekly", "monthly", "yearly"] } },
+        { name: "date", in: "query", schema: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" } },
+        { name: "locale", in: "query", schema: { type: "string", enum: ["en", "ar"] } },
+        { name: "format", in: "query", schema: { type: "string", enum: ["bundle", "payload"], default: "bundle" } },
+        { name: "includeCommunity", in: "query", schema: { type: "boolean", default: true } },
+      ],
+      security: bearer,
+      responses: std(),
+    },
+  },
+  "/reports/your-report/export": {
+    post: {
+      tags: ["Reports"],
+      summary: "Export Your Report PDF (visual, Puppeteer)",
+      description:
+        "HTML/CSS PDF matching app Your Report UI. `period` weekly|monthly|yearly. `delivery` email|download|both. Requires SMTP for email.",
+      parameters: lang,
+      security: bearer,
+      requestBody: jsonBody("#/components/schemas/StudyReportExportBody", "", {
+        period: "weekly",
+        anchorDate: "2026-05-24",
+        locale: "en",
+        delivery: "email",
+      }),
+      responses: { ...std(), 503: R.ServiceUnavailable },
+    },
+  },
+  "/reports/your-report/export/{reportId}": {
+    get: {
+      tags: ["Reports"],
+      summary: "Download Your Report PDF",
+      parameters: [
+        { name: "reportId", in: "path", required: true, schema: { type: "string", format: "uuid" } },
+        { name: "token", in: "query", schema: { type: "string" } },
+      ],
+      responses: {
+        200: { description: "PDF", content: { "application/pdf": { schema: { type: "string", format: "binary" } } } },
+        404: R.NotFound,
+      },
+    },
+  },
+
+  "/tasks/report/completions": {
+    get: {
+      tags: ["Tasks"],
+      summary: "Task completions report (by completedAt, UTC days)",
+      description: [
+        "**Query — required:** `from`, `to` = **`YYYY-MM-DD`** (UTC, inclusive).",
+        "**Query — optional:** `granularity=day` (only value supported).",
+        "**Returns:** `buckets[]` with `{ label, completedCount }` and `totalCompleted`. Requires tasks completed with **`completedAt`** set (set automatically on **`PATCH /tasks/{id}`** with `status: completed`).",
+        "**Statuses:** **200**; **400** invalid range; **401**; **500**.",
+      ].join("\n\n"),
+      parameters: [
+        ...lang,
+        {
+          name: "from",
+          in: "query",
+          required: true,
+          schema: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", example: "2026-05-19" },
+        },
+        {
+          name: "to",
+          in: "query",
+          required: true,
+          schema: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", example: "2026-05-26" },
+        },
+        {
+          name: "granularity",
+          in: "query",
+          required: false,
+          schema: { type: "string", enum: ["day"], default: "day" },
+        },
+      ],
+      security: bearer,
+      responses: { ...std(), 200: R.TaskCompletionsReport200Ok },
     },
   },
   "/tasks/{id}": {
@@ -2092,8 +2197,8 @@ const paths = {
           name: "topLevelMode",
           in: "query",
           required: false,
-          schema: { type: "string", enum: ["concentration", "call_with_mishka"] },
-          description: "Filter by mode; omit for both. / تصفية حسب نوع الجلسة.",
+          schema: { type: "string", enum: ["concentration", "call_with_mishka", "all"] },
+          description: "Filter by mode; omit or `all` for both modes combined. / تصفية حسب نوع الجلسة.",
         },
       ],
       security: bearer,
@@ -2106,7 +2211,7 @@ const paths = {
       summary: "Day rollup (UTC calendar day)",
       description: [
         "**Query — required:** `date` = **`YYYY-MM-DD`** (UTC midnight boundary).",
-        "**Query — optional:** `topLevelMode` filter.",
+        "**Query — optional:** `topLevelMode` — `concentration`, `call_with_mishka`, or **`all`** (same as omit: both modes combined).",
         "**Includes sessions where `startedAt` ∈ [UTC day start, next day).** Returns **`totals`**, **`sessionSummaries`**, **`userContext`** (streak snapshot, baseline avg from recent completed sessions — see README).",
         "**Statuses:** **200**; **400** invalid date; **401**; **500**.",
         studyI18n,
@@ -2125,8 +2230,8 @@ const paths = {
           name: "topLevelMode",
           in: "query",
           required: false,
-          schema: { type: "string", enum: ["concentration", "call_with_mishka"] },
-          description: "Optional filter.",
+          schema: { type: "string", enum: ["concentration", "call_with_mishka", "all"] },
+          description: "Optional filter; omit or `all` = Concentration + Camera combined.",
         },
       ],
       security: bearer,
@@ -2139,7 +2244,7 @@ const paths = {
       summary: "Week rollup (UTC Monday → Monday)",
       description: [
         "**Query — required:** `date` — any **`YYYY-MM-DD`** falling inside the week; server computes **Monday 00:00 UTC** through **next Monday** (exclusive).",
-        "**Optional:** `topLevelMode`. Same aggregate shape as **reports/day**.",
+        "**Optional:** `topLevelMode` (`concentration` | `call_with_mishka` | **`all`**). Same aggregate shape as **reports/day**.",
         "**Statuses:** **200**; **400** invalid date; **401**; **500**.",
         studyI18n,
       ].join("\n\n"),
@@ -2156,7 +2261,7 @@ const paths = {
           name: "topLevelMode",
           in: "query",
           required: false,
-          schema: { type: "string", enum: ["concentration", "call_with_mishka"] },
+          schema: { type: "string", enum: ["concentration", "call_with_mishka", "all"] },
         },
       ],
       security: bearer,
@@ -2169,7 +2274,7 @@ const paths = {
       summary: "Month rollup (UTC month)",
       description: [
         "**Query — required:** `year` (2000–2100), `month` (1–12). Bounds are UTC month start/end.",
-        "**Optional:** `topLevelMode`. Same aggregate shape as **reports/day**.",
+        "**Optional:** `topLevelMode` (`concentration` | `call_with_mishka` | **`all`**). Same aggregate shape as **reports/day**.",
         "**Statuses:** **200**; **400** invalid year/month; **401**; **500**.",
         studyI18n,
       ].join("\n\n"),
@@ -2191,11 +2296,100 @@ const paths = {
           name: "topLevelMode",
           in: "query",
           required: false,
-          schema: { type: "string", enum: ["concentration", "call_with_mishka"] },
+          schema: { type: "string", enum: ["concentration", "call_with_mishka", "all"] },
         },
       ],
       security: bearer,
       responses: { ...std(), 200: R.StudyPeriodReport200Ok },
+    },
+  },
+  "/study-with-mishka/reports/export": {
+    post: {
+      tags: ["Study With Mishka"],
+      summary: "Generate Your Report PDF (optional email delivery)",
+      description: [
+        "Builds a PDF from the same aggregates as Your Report (study, streak history, AI tools, task completions).",
+        "**Body:** `period` = `daily` | `weekly` | `monthly` | `yearly`; `date` for daily/weekly; `year` + `month` for monthly; `year` for yearly.",
+        "**Optional:** `topLevelMode` (`all` default), `delivery` = `download` (default) or `email`.",
+        "**Email** requires server SMTP (`SMTP_HOST`, `SMTP_FROM`, …) — otherwise **503** `REPORT_EXPORT_EMAIL_NOT_CONFIGURED`.",
+        "**Returns:** `pdfUrl` (signed download link with `token`), `expiresAt`, optional `emailedTo`.",
+        "**Download:** `GET /study-with-mishka/reports/export/{exportId}?token=…` (no Bearer required when token is valid).",
+        studyI18n,
+      ].join("\n\n"),
+      parameters: lang,
+      security: bearer,
+      requestBody: jsonBody("#/components/schemas/StudyReportExportBody", "", {
+        period: "weekly",
+        date: "2026-05-19",
+        delivery: "download",
+        topLevelMode: "all",
+      }),
+      responses: { ...std(), 200: R.StudyReportExport200Ok, 503: R.ServiceUnavailable },
+    },
+  },
+  "/study-with-mishka/reports/export/{exportId}": {
+    get: {
+      tags: ["Study With Mishka"],
+      summary: "Download exported report PDF",
+      description: [
+        "Streams the PDF file. Use the `token` query param from **POST …/reports/export** (email link) or send **Bearer** JWT as the export owner.",
+        "**404** when missing or expired.",
+      ].join("\n\n"),
+      parameters: [
+        ...lang,
+        {
+          name: "exportId",
+          in: "path",
+          required: true,
+          schema: { type: "string", format: "uuid" },
+        },
+        {
+          name: "token",
+          in: "query",
+          required: false,
+          schema: { type: "string" },
+          description: "Signed JWT from POST export response URL.",
+        },
+      ],
+      responses: {
+        200: {
+          description: "PDF file",
+          content: { "application/pdf": { schema: { type: "string", format: "binary" } } },
+        },
+        401: R.Unauthorized,
+        403: R.Forbidden,
+        404: R.NotFound,
+      },
+    },
+  },
+  "/study-with-mishka/reports/year": {
+    get: {
+      tags: ["Study With Mishka"],
+      summary: "Year rollup (12 UTC monthly buckets)",
+      description: [
+        "**Query — required:** `year` (2000–2100).",
+        "**Optional:** `topLevelMode` — `concentration`, `call_with_mishka`, or **`all`** (default: both modes).",
+        "**Returns:** `monthlyBuckets[]` (Jan–Dec) with per-month `totals.sumApproximateMainStudySeconds` plus year-level `totals`. No full `sessionSummaries` (use **reports/month** for detail).",
+        "**Statuses:** **200**; **400** invalid year; **401**; **500**.",
+        studyI18n,
+      ].join("\n\n"),
+      parameters: [
+        ...lang,
+        {
+          name: "year",
+          in: "query",
+          required: true,
+          schema: { type: "integer", minimum: 2000, maximum: 2100, example: 2026 },
+        },
+        {
+          name: "topLevelMode",
+          in: "query",
+          required: false,
+          schema: { type: "string", enum: ["concentration", "call_with_mishka", "all"] },
+        },
+      ],
+      security: bearer,
+      responses: { ...std(), 200: R.StudyYearReport200Ok },
     },
   },
   "/study-with-mishka/stats/summary": {
@@ -2435,6 +2629,35 @@ const paths = {
     },
   },
 
+  "/user-preferences/me": {
+    get: {
+      tags: ["User preferences"],
+      summary: "My preferences (incl. automatic report email)",
+      description:
+        "Returns preference row plus `reportEmail`: `reportEmailAutoEnabled`, `reportEmailFrequency` (`weekly`|`monthly`|null), `reportEmailLocale`, `reportEmailLastSentAt`.",
+      parameters: lang,
+      security: bearer,
+      responses: std(),
+    },
+    patch: {
+      tags: ["User preferences"],
+      summary: "Update automatic Your Report email settings",
+      description: [
+        "Enable: `{ \"reportEmailAutoEnabled\": true, \"reportEmailFrequency\": \"weekly\" }` (or `monthly`).",
+        "Disable: `{ \"reportEmailAutoEnabled\": false }`.",
+        "Optional `reportEmailLocale`: `en` | `ar`.",
+      ].join(" "),
+      parameters: lang,
+      security: bearer,
+      requestBody: jsonBody("#/components/schemas/UserPreferenceReportEmailBody", "", {
+        reportEmailAutoEnabled: true,
+        reportEmailFrequency: "weekly",
+        reportEmailLocale: "en",
+      }),
+      responses: std(),
+    },
+  },
+
   "/user-preferences": {
     get: {
       tags: ["User preferences"],
@@ -2603,6 +2826,34 @@ const paths = {
     },
   },
 
+  "/user-ai-activity/report": {
+    get: {
+      tags: ["User AI activity"],
+      summary: "AI tools usage report (Your Report)",
+      description: [
+        "**Query — required:** `from`, `to` = **`YYYY-MM-DD`** (UTC, inclusive).",
+        "**Counts** quizzes, flashcard sets, summaries, and mind maps **created** in the range (tutor materialization), replacing client-side chat-session scraping.",
+        "**Statuses:** **200**; **400**; **401**; **500**.",
+      ].join("\n\n"),
+      parameters: [
+        ...lang,
+        {
+          name: "from",
+          in: "query",
+          required: true,
+          schema: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", example: "2026-05-01" },
+        },
+        {
+          name: "to",
+          in: "query",
+          required: true,
+          schema: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", example: "2026-05-31" },
+        },
+      ],
+      security: bearer,
+      responses: { ...std(), 200: R.AiUsageReport200Ok },
+    },
+  },
   "/user-ai-activity": {
     get: {
       tags: ["User AI activity"],
@@ -2645,6 +2896,34 @@ const paths = {
     },
   },
 
+  "/daily-streaks/history": {
+    get: {
+      tags: ["Daily streaks"],
+      summary: "Streak history for a UTC date range (Your Report)",
+      description: [
+        "**Query — required:** `from`, `to` = **`YYYY-MM-DD`** (UTC, inclusive, max **366** days).",
+        "**Returns:** `currentStreak`, `longestStreak`, `freezesRemaining`, and `days[]` with `date`, `state` (`past_done`, `past_missed`, `today_done`, `today_pending`, `upcoming`), optional Prisma `status`.",
+        "**Statuses:** **200**; **400** invalid range; **401**; **500**.",
+      ].join("\n\n"),
+      parameters: [
+        ...lang,
+        {
+          name: "from",
+          in: "query",
+          required: true,
+          schema: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", example: "2026-05-01" },
+        },
+        {
+          name: "to",
+          in: "query",
+          required: true,
+          schema: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$", example: "2026-05-31" },
+        },
+      ],
+      security: bearer,
+      responses: { ...std(), 200: R.DailyStreakHistory200Ok },
+    },
+  },
   "/daily-streaks": {
     get: {
       tags: ["Daily streaks"],

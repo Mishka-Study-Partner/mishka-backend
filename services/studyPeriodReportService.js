@@ -62,7 +62,7 @@ function refNowForPeriod(rangeEnd) {
  * Aggregate Study With Mishka metrics for a UTC time window (sessions filtered by startedAt in [start,end)).
  */
 async function buildStudyPeriodReport(userId, kind, range, options = {}) {
-  const { topLevelMode } = options;
+  const { topLevelMode, explicitAll } = options;
   const where = sessionWhere(userId, range, topLevelMode);
   const refDate = refNowForPeriod(range.end);
 
@@ -206,7 +206,11 @@ async function buildStudyPeriodReport(userId, kind, range, options = {}) {
       timeZoneNote: "Bounds are UTC; day = calendar date in UTC.",
     },
     generatedAt: new Date().toISOString(),
-    filters: topLevelMode ? { topLevelMode } : {},
+    filters: topLevelMode
+      ? { topLevelMode }
+      : explicitAll
+        ? { topLevelMode: "all" }
+        : {},
     totals: {
       sessionsStarted: sessions.length,
       byStatus,
@@ -257,6 +261,67 @@ async function reportForMonth(userId, year, month, options) {
   return buildStudyPeriodReport(userId, "month", range, options);
 }
 
+/** Twelve UTC month buckets (Jan–Dec) for a calendar year; no full sessionSummaries (use month endpoint for detail). */
+async function reportForYear(userId, year, options = {}) {
+  const y = Number(year);
+  if (!Number.isInteger(y) || y < 2000 || y > 2100) return null;
+
+  const monthlyBuckets = await Promise.all(
+    Array.from({ length: 12 }, async (_, i) => {
+      const month = i + 1;
+      const range = utcMonthRange(y, month);
+      const report = await buildStudyPeriodReport(userId, "month", range, options);
+      return {
+        label: report.period.label,
+        month,
+        year: y,
+        startUtc: report.period.startUtc,
+        endUtc: report.period.endUtc,
+        totals: {
+          sessionsStarted: report.totals.sessionsStarted,
+          sumApproximateMainStudySeconds: report.totals.sumApproximateMainStudySeconds,
+          byTopLevelMode: report.totals.byTopLevelMode,
+        },
+      };
+    })
+  );
+
+  let sumApproximateMainStudySeconds = 0;
+  let sessionsStarted = 0;
+  const byTopLevelMode = { concentration: 0, call_with_mishka: 0 };
+  for (const b of monthlyBuckets) {
+    sumApproximateMainStudySeconds += b.totals.sumApproximateMainStudySeconds;
+    sessionsStarted += b.totals.sessionsStarted;
+    byTopLevelMode.concentration += b.totals.byTopLevelMode.concentration;
+    byTopLevelMode.call_with_mishka += b.totals.byTopLevelMode.call_with_mishka;
+  }
+
+  const start = new Date(Date.UTC(y, 0, 1));
+  const end = new Date(Date.UTC(y + 1, 0, 1));
+
+  return {
+    period: {
+      kind: "year",
+      label: String(y),
+      startUtc: start.toISOString(),
+      endUtc: end.toISOString(),
+      timeZoneNote: "Bounds are UTC; monthly buckets are UTC calendar months.",
+    },
+    generatedAt: new Date().toISOString(),
+    filters: options.topLevelMode
+      ? { topLevelMode: options.topLevelMode }
+      : options.explicitAll
+        ? { topLevelMode: "all" }
+        : {},
+    totals: {
+      sessionsStarted,
+      sumApproximateMainStudySeconds,
+      byTopLevelMode,
+    },
+    monthlyBuckets,
+  };
+}
+
 module.exports = {
   parseUtcDateParam,
   utcDayRange,
@@ -266,4 +331,5 @@ module.exports = {
   reportForDay,
   reportForWeek,
   reportForMonth,
+  reportForYear,
 };

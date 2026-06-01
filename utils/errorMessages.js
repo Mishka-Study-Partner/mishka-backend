@@ -118,6 +118,14 @@ const ERROR_MESSAGES = {
     en: "No streak freezes remaining",
     ar: "لا توجد أيام تجميد متبقية للسلسلة",
   },
+  REPORT_EXPORT_EMAIL_NOT_CONFIGURED: {
+    en: "Report email delivery is not configured on the server",
+    ar: "إرسال التقرير بالبريد غير مهيأ على الخادم",
+  },
+  REPORT_NO_DATA: {
+    en: "No report data for this period",
+    ar: "لا توجد بيانات تقرير لهذه الفترة",
+  },
   USAGE_DAY_CAP_EXCEEDED: {
     en: "Daily usage reporting cap exceeded for this date",
     ar: "تم تجاوز الحد الأقصى لتسجيل وقت الاستخدام لهذا اليوم",
