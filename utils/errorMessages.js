@@ -26,13 +26,21 @@ const ERROR_MESSAGES = {
     en: "User not found",
     ar: "المستخدم غير موجود",
   },
+  INVITE_USER_NOT_FOUND: {
+    en: "No Mishka account found for that email or username",
+    ar: "لا يوجد حساب بهذا البريد أو اسم المستخدم",
+  },
+  INVITE_SELF_NOT_ALLOWED: {
+    en: "You cannot invite yourself. You are already in this community.",
+    ar: "لا يمكنك دعوة نفسك. أنت عضو في هذا المجتمع بالفعل.",
+  },
   PREFERENCES_NOT_FOUND: {
     en: "User preferences not found",
     ar: "تفضيلات المستخدم غير موجودة",
   },
-  CONFLICT: {
-    en: "Conflict",
-    ar: "تعارض في البيانات",
+  SUBJECT_NAME_IN_USE: {
+    en: "A subject with this name already exists",
+    ar: "توجد مادة بنفس الاسم مسبقاً",
   },
   UNIQUE_VIOLATION: {
     en: "A record with this value already exists",
@@ -57,6 +65,14 @@ const ERROR_MESSAGES = {
   AI_SERVICE_ERROR: {
     en: "Upstream AI service error",
     ar: "خطأ في خدمة الذكاء الاصطناعي",
+  },
+  AI_SESSION_NOT_FOUND: {
+    en: "AI tutor session expired or not found — start a new chat or re-upload your file",
+    ar: "انتهت جلسة المعلّم أو لم تُعثر عليها — ابدأ محادثة جديدة أو أعد رفع الملف",
+  },
+  CHAT_SESSION_NOT_FOUND: {
+    en: "Chat session not found",
+    ar: "لم يتم العثور على جلسة المحادثة",
   },
   RESET_CODE_INVALID: {
     en: "Invalid or expired reset code",

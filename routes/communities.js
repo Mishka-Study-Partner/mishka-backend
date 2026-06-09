@@ -1,5 +1,6 @@
 const express = require("express");
 const c = require("../controllers/communityController");
+const discover = require("../controllers/communityDiscoverController");
 const msg = require("../controllers/communityChannelMessageController");
 const { validate } = require("../middleware/validateRequest");
 const {
@@ -10,6 +11,11 @@ const {
   communityJoinSchema,
   communityLeaveSchema,
   communityUpdateSchema,
+  communityRecommendedQuerySchema,
+  communityDiscoverQuerySchema,
+  communityDiscoverCategoriesQuerySchema,
+  communityCategoryTitlesQuerySchema,
+  communityInviteMemberSchema,
   communityAddMemberSchema,
   communityMemberRoleSchema,
   communityChannelMessageCreateSchema,
@@ -20,6 +26,11 @@ const router = express.Router();
 
 router.get("/activity/report", validate(communityActivityReportQuerySchema, "query"), c.activityReport);
 
+router.get("/recommended", validate(communityRecommendedQuerySchema, "query"), discover.recommended);
+router.get("/discover/categories", validate(communityDiscoverCategoriesQuerySchema, "query"), discover.categories);
+router.get("/category-titles", validate(communityCategoryTitlesQuerySchema, "query"), discover.categoryTitles);
+router.get("/discover", validate(communityDiscoverQuerySchema, "query"), discover.discover);
+
 router.post("/join", validate(communityJoinSchema), c.join);
 router.get("/", c.list);
 router.post("/", validate(communityCreateSchema), c.create);
@@ -28,6 +39,7 @@ router.post("/:id/leave", validate(communityLeaveSchema), c.leave);
 router.post("/:id/pin", c.pin);
 router.delete("/:id/pin", c.unpin);
 router.get("/:id/invite", c.getInvite);
+router.post("/:id/invite", validate(communityInviteMemberSchema), c.inviteMember);
 router.post("/:id/invite/regenerate", c.regenerateInvite);
 
 router.get("/:id/members", c.listMembers);

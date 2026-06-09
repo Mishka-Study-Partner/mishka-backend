@@ -11,6 +11,19 @@ const {
   assertMember,
 } = require("../services/communityAuthz");
 const { buildCommunityActivityReport } = require("../services/communityActivityReportService");
+const { communityDiscoveryDataFromBody } = require("../utils/communityDiscoveryFields");
+const { mapCommunityCard } = require("../services/communityRecommendationService");
+const {
+  pinnedAtByCommunityForUser,
+  enrichWithPinnedFlags,
+  enrichCommunityWithPinned,
+} = require("../utils/communitySavedPin");
+const { buildCommunityInvitePayload } = require("../utils/communityShareUrl");
+const {
+  normalizeInviteEmail,
+  normalizeInviteUsername,
+  findUserForCommunityInvite,
+} = require("../services/communityInviteUserLookup");
 
 function randomInviteCode() {
   return crypto.randomBytes(5).toString("hex").slice(0, 10);
@@ -46,6 +59,7 @@ function withChannelCreatorFields(row) {
 
 exports.list = asyncHandler(async (req, res) => {
   const uid = req.auth.sub;
+  const pinnedMap = await pinnedAtByCommunityForUser(uid);
   const where = isAdmin(req.auth)
     ? {}
     : {
@@ -58,7 +72,12 @@ exports.list = asyncHandler(async (req, res) => {
       _count: { select: { members: true, channels: true } },
     },
   });
-  res.apiSuccess(rows, "OK", 200);
+  const locale = req.query.locale === "ar" ? "ar" : "en";
+  res.apiSuccess(
+    rows.map((r) => enrichCommunityWithPinned(mapCommunityCard(r, locale), pinnedMap)),
+    "OK",
+    200
+  );
 });
 
 exports.getById = asyncHandler(async (req, res) => {
@@ -73,13 +92,21 @@ exports.getById = asyncHandler(async (req, res) => {
       if (!m) throw forbidden("This community is private", "FORBIDDEN");
     }
   }
-  res.apiSuccess(row, "OK", 200);
+  res.apiSuccess(
+    enrichCommunityWithPinned(
+      mapCommunityCard(row, req.query.locale === "ar" ? "ar" : "en"),
+      await pinnedAtByCommunityForUser(req.auth.sub)
+    ),
+    "OK",
+    200
+  );
 });
 
 exports.create = asyncHandler(async (req, res) => {
-  const { name, description, imageUrl, visibility, category } = req.body;
+  const { name, description, imageUrl, visibility } = req.body;
   const vis = visibility === "private" ? "private" : "public";
   const invites = vis === "private" ? privateInviteFields() : { inviteToken: null, inviteCode: null };
+  const discovery = communityDiscoveryDataFromBody(req.body);
   const row = await prisma.$transaction(async (tx) => {
     const c = await tx.community.create({
       data: {
@@ -87,7 +114,14 @@ exports.create = asyncHandler(async (req, res) => {
         description: description != null ? String(description).slice(0, 8000) : null,
         imageUrl: imageUrl != null ? String(imageUrl).slice(0, 500) : null,
         visibility: vis,
-        category: category != null ? String(category).trim().slice(0, 100) : "general",
+        category: discovery.category ?? "general",
+        subjectKeys: discovery.subjectKeys ?? ["general"],
+        educationStatus: discovery.educationStatus,
+        schoolTrack: discovery.schoolTrack,
+        schoolGrade: discovery.schoolGrade,
+        universityYear: discovery.universityYear,
+        purpose: discovery.purpose ?? "general",
+        locale: discovery.locale ?? "en",
         ownerUserId: req.auth.sub,
         inviteToken: invites.inviteToken,
         inviteCode: invites.inviteCode,
@@ -98,7 +132,7 @@ exports.create = asyncHandler(async (req, res) => {
     });
     return c;
   });
-  res.apiCreated(row, "CREATED");
+  res.apiCreated(mapCommunityCard({ ...row, _count: { members: 1, channels: 0 } }, req.body.locale === "ar" ? "ar" : "en"), "CREATED");
 });
 
 exports.update = asyncHandler(async (req, res) => {
@@ -121,11 +155,12 @@ exports.update = asyncHandler(async (req, res) => {
       data.inviteToken = null;
     }
   }
+  Object.assign(data, communityDiscoveryDataFromBody(req.body, { partial: true }));
   if (Object.keys(data).length === 0) {
     throw badRequest("No updatable fields provided", undefined, "VALIDATION_ERROR");
   }
-  const row = await prisma.community.update({ where: { id: communityId }, data });
-  res.apiSuccess(row, "OK", 200);
+  const row = await prisma.community.update({ where: { id: communityId }, data, include: { _count: { select: { members: true, channels: true } } } });
+  res.apiSuccess(mapCommunityCard(row, req.body.locale === "ar" ? "ar" : "en"), "OK", 200);
 });
 
 exports.remove = asyncHandler(async (req, res) => {
@@ -197,12 +232,25 @@ exports.leave = asyncHandler(async (req, res) => {
 exports.pin = asyncHandler(async (req, res) => {
   const communityId = req.params.id;
   await assertMember(req, communityId);
-  const row = await prisma.userSavedCommunity.upsert({
+  const saved = await prisma.userSavedCommunity.upsert({
     where: { userId_communityId: { userId: req.auth.sub, communityId } },
     create: { userId: req.auth.sub, communityId },
     update: {},
   });
-  res.apiSuccess(row, "OK", 200);
+  const membership = await getMembership(req.auth.sub, communityId);
+  const base = membership
+    ? enrichWithPinnedFlags(
+        { userId: req.auth.sub, communityId, role: membership.role, id: membership.id },
+        new Map([[communityId, saved.createdAt]])
+      )
+    : {
+        userId: req.auth.sub,
+        communityId,
+        isPinned: true,
+        saved: true,
+        pinnedAt: saved.createdAt.toISOString(),
+      };
+  res.apiSuccess({ ...saved, ...base, isPinned: true, saved: true }, "OK", 200);
 });
 
 exports.unpin = asyncHandler(async (req, res) => {
@@ -222,16 +270,77 @@ exports.getInvite = asyncHandler(async (req, res) => {
   const communityId = req.params.id;
   const { community } = await assertOwnerOrAdmin(req, communityId);
   if (community.visibility !== "private") {
-    throw badRequest("Invite links apply to private communities only", undefined, "VALIDATION_ERROR");
+    return res.apiSuccess(
+      buildCommunityInvitePayload(req, community, "public", null, null),
+      "OK",
+      200
+    );
   }
   res.apiSuccess(
-    {
-      inviteCode: community.inviteCode,
-      inviteToken: community.inviteToken,
-      hint: "Share inviteCode or a deep link containing inviteToken; do not expose in public listings.",
-    },
+    buildCommunityInvitePayload(
+      req,
+      community,
+      "private",
+      community.inviteCode,
+      community.inviteToken
+    ),
     "OK",
     200
+  );
+});
+
+/** Owner/admin: add member by email or username (immediate join). */
+exports.inviteMember = asyncHandler(async (req, res) => {
+  const communityId = req.params.id;
+  await assertOwnerOrAdmin(req, communityId);
+  const email = normalizeInviteEmail(req.body.email);
+  const username = normalizeInviteUsername(req.body.username);
+
+  const user = await findUserForCommunityInvite({ email: email || undefined, username: username || undefined });
+  if (!user) {
+    throw notFound(
+      "No Mishka account found for that email or username",
+      "INVITE_USER_NOT_FOUND"
+    );
+  }
+
+  const community = await loadCommunity(communityId);
+  if (user.id === req.auth.sub) {
+    throw badRequest(
+      "You cannot invite yourself. You are already in this community.",
+      undefined,
+      "INVITE_SELF_NOT_ALLOWED"
+    );
+  }
+
+  const existing = await getMembership(user.id, communityId);
+  if (existing) {
+    return res.apiSuccess(
+      {
+        status: "already_member",
+        joined: true,
+        invited: false,
+        userId: user.id,
+        membership: enrichWithPinnedFlags(existing, await pinnedAtByCommunityForUser(user.id)),
+      },
+      "OK",
+      200
+    );
+  }
+
+  const row = await prisma.userCommunity.create({
+    data: { userId: user.id, communityId, role: "member" },
+  });
+
+  res.apiCreated(
+    {
+      status: "joined",
+      joined: true,
+      invited: true,
+      userId: user.id,
+      membership: row,
+    },
+    "CREATED"
   );
 });
 
@@ -269,12 +378,21 @@ exports.listMembers = asyncHandler(async (req, res) => {
 exports.addMemberByEmail = asyncHandler(async (req, res) => {
   const communityId = req.params.id;
   await assertOwnerOrAdmin(req, communityId);
-  const email = String(req.body?.email || "").trim().toLowerCase();
+  const email = normalizeInviteEmail(req.body?.email);
   if (!email) throw badRequest("email is required", undefined, "VALIDATION_ERROR");
-  const user = await prisma.user.findFirst({ where: { email } });
-  if (!user) throw notFound();
+  const user = await findUserForCommunityInvite({ email });
+  if (!user) {
+    throw notFound(
+      "No Mishka account found for that email or username",
+      "INVITE_USER_NOT_FOUND"
+    );
+  }
   if (user.id === req.auth.sub) {
-    throw badRequest("Use join flow for yourself", undefined, "VALIDATION_ERROR");
+    throw badRequest(
+      "You cannot invite yourself. You are already in this community.",
+      undefined,
+      "INVITE_SELF_NOT_ALLOWED"
+    );
   }
   const community = await loadCommunity(communityId);
   if (user.id === community.ownerUserId) {

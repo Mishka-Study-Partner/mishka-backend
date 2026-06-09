@@ -1,5 +1,6 @@
 const { HttpError } = require("../../utils/httpError");
 const { buildYourReportPayload } = require("./yourReportPayloadService");
+const { buildStudyBySubject } = require("./yourReportStudyBySubject");
 const { resolvePeriodWindow, formatPeriodLabel } = require("./yourReportPeriod");
 const { labelsFor, sectionSuffix } = require("./yourReportLabels");
 const { buildCommunityActivityReport } = require("../communityActivityReportService");
@@ -58,6 +59,7 @@ function emptyReportSections(period, window, locale) {
     study: {
       subtitle: labels.reportDuringConcentrationMode,
       buckets: [],
+      bySubject: [],
       totals: {
         sumApproximateMainStudySeconds: 0,
         sumStudyMinutes: 0,
@@ -118,6 +120,9 @@ async function buildYourReportBundle(userId, opts) {
   }
 
   const studyTotals = await studyTotalsForPeriod(userId, period, window, opts.anchorDate);
+  const studyBySubject =
+    payload.study?.bySubject ??
+    (await buildStudyBySubject(userId, payload.rangeStart, payload.rangeEnd, locale));
 
   let community = emptyReportSections(period, window, locale).community;
   if (includeCommunity) {
@@ -148,6 +153,7 @@ async function buildYourReportBundle(userId, opts) {
         studyMinutes: b.value,
       })),
       totals: studyTotals,
+      bySubject: studyBySubject,
     },
     aiTools: {
       quizzes: payload.aiTools.quizzes,

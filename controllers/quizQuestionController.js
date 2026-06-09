@@ -3,6 +3,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const { notFound, badRequest } = require("../utils/httpError");
 const { assertOwnedOrAdmin, isAdmin } = require("../utils/authz");
 const { recordDailyStreakActivity } = require("../services/dailyStreakService");
+const { mapQuizQuestionBody } = require("../utils/quizQuestionMapper");
 
 async function loadQuestionWithQuiz(id) {
   return prisma.quizQuestion.findUnique({
@@ -34,11 +35,14 @@ exports.create = asyncHandler(async (req, res) => {
   }
   const quiz = await prisma.quiz.findUnique({ where: { id: quizId } });
   assertOwnedOrAdmin(req, quiz, "userId");
-  const row = await prisma.quizQuestion.create({
-    data: {
-      ...req.body,
-      quizId,
-    },
+  const data = mapQuizQuestionBody(req.body);
+  const row = await prisma.$transaction(async (tx) => {
+    const q = await tx.quizQuestion.create({ data });
+    await tx.quiz.update({
+      where: { id: quizId },
+      data: { totalQuestions: { increment: 1 } },
+    });
+    return q;
   });
   void recordDailyStreakActivity(quiz.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
   res.apiCreated(row, "CREATED");
@@ -48,10 +52,8 @@ exports.update = asyncHandler(async (req, res) => {
   const existing = await loadQuestionWithQuiz(req.params.id);
   if (!existing?.quiz) throw notFound();
   assertOwnedOrAdmin(req, existing.quiz, "userId");
-  const data = { ...req.body };
-  if (!data || typeof data !== "object" || Object.keys(data).length === 0) {
-    throw badRequest("No fields to update", undefined, "VALIDATION_ERROR");
-  }
+  const data = mapQuizQuestionBody({ ...req.body, quizId: existing.quizId });
+  delete data.quizId;
   const row = await prisma.quizQuestion.update({
     where: { id: req.params.id },
     data,
@@ -64,6 +66,12 @@ exports.remove = asyncHandler(async (req, res) => {
   const existing = await loadQuestionWithQuiz(req.params.id);
   if (!existing?.quiz) throw notFound();
   assertOwnedOrAdmin(req, existing.quiz, "userId");
-  await prisma.quizQuestion.delete({ where: { id: req.params.id } });
+  await prisma.$transaction(async (tx) => {
+    await tx.quizQuestion.delete({ where: { id: req.params.id } });
+    await tx.quiz.update({
+      where: { id: existing.quizId },
+      data: { totalQuestions: { decrement: 1 } },
+    });
+  });
   res.apiSuccess(null, "DELETED", 200);
 });

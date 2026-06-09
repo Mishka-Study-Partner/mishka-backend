@@ -52,8 +52,32 @@ function verifyDownloadToken(token) {
 }
 
 /**
+ * Resolve export recipient: explicit account/custom choice, emailTo override, saved preference, then account email.
  * @param {string} userId
- * @param {{ period: string; anchorDate: string; locale?: string; delivery?: string; baseUrl?: string; periodKey?: string }} opts
+ * @param {{ email: string }} user
+ * @param {{ emailRecipient?: "account"|"custom"; emailTo?: string }} opts
+ */
+async function resolveExportRecipientEmail(userId, user, opts = {}) {
+  const { emailRecipient, emailTo } = opts;
+  if (emailRecipient === "account") return user.email;
+  if (emailRecipient === "custom") {
+    const to = emailTo?.trim();
+    if (!to) {
+      throw badRequest("emailTo is required when emailRecipient is custom", undefined, "VALIDATION_ERROR");
+    }
+    return to;
+  }
+  if (emailTo?.trim()) return emailTo.trim();
+  const pref = await prisma.userPreference.findUnique({
+    where: { userId },
+    select: { reportEmailRecipient: true },
+  });
+  return pref?.reportEmailRecipient?.trim() || user.email;
+}
+
+/**
+ * @param {string} userId
+ * @param {{ period: string; anchorDate: string; locale?: string; delivery?: string; emailRecipient?: "account"|"custom"; emailTo?: string; baseUrl?: string; periodKey?: string }} opts
  */
 async function runYourReportExportForUser(userId, opts) {
   const {
@@ -61,6 +85,8 @@ async function runYourReportExportForUser(userId, opts) {
     anchorDate,
     locale = "en",
     delivery = "download",
+    emailRecipient,
+    emailTo,
     baseUrl: baseUrlOverride,
     periodKey,
   } = opts;
@@ -82,6 +108,8 @@ async function runYourReportExportForUser(userId, opts) {
     select: { email: true, firstName: true, lastName: true },
   });
   if (!user) throw notFound();
+
+  const recipientEmail = await resolveExportRecipientEmail(userId, user, { emailRecipient, emailTo });
 
   const reportId = newExportId();
   const expiresAt = new Date(Date.now() + exportTtlMs());
@@ -120,7 +148,7 @@ async function runYourReportExportForUser(userId, opts) {
     }
     const filename = `mishka-report-${period}-${anchorDate}.pdf`;
     await sendYourReportEmail({
-      to: user.email,
+      to: recipientEmail,
       subject,
       periodLabel: payload.periodLabel,
       downloadUrl: pdfUrl,
@@ -128,7 +156,7 @@ async function runYourReportExportForUser(userId, opts) {
       pdfPath: outPath,
       filename,
     });
-    emailedTo = user.email;
+    emailedTo = recipientEmail;
     emailSentAt = new Date().toISOString();
   }
 
@@ -152,6 +180,8 @@ async function createYourReportExport(req) {
     anchorDate: req.body.anchorDate,
     locale: req.body.locale ?? "en",
     delivery: req.body.delivery ?? "download",
+    emailRecipient: req.body.emailRecipient,
+    emailTo: req.body.emailTo,
     baseUrl: resolvePublicBaseUrl(req),
   });
 }

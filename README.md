@@ -193,13 +193,14 @@ Base paths **`/todo-lists`** and **`/tasks`** (JWT); also **`GET /users/:id/todo
 
 ## Communities (v2)
 
-- **Create** (`POST /communities`) — you become **owner**; set `visibility`: **`public`** (anyone can join with `communityId`) or **`private`** (invite-only). Optional `name`, `description`, `imageUrl`, `category`.
+- **Create** (`POST /communities`) — you become **owner**; set `visibility`: **`public`** (anyone can join with `communityId`) or **`private`** (invite-only). Optional `name`, `description`, `imageUrl`, `category`, **`subjectKeys`**, **`educationStatus`** / grade or year, **`purpose`**, **`locale`** (see **`docs/FLUTTER_COMMUNITY_DISCOVER_HANDOFF.md`**).
+- **Discover** — **`GET /communities/recommended`**, **`GET /communities/discover`**, **`GET /communities/discover/categories`** (public only; excludes communities you already joined).
 - **Join** (`POST /communities/join`) — public: `{ "communityId": "<uuid>" }`. Private: `{ "inviteCode": "…" }` or `{ "inviteToken": "<uuid>" }` from owner/admin (**GET** `…/invite`, **POST** `…/invite/regenerate`).
 - **Members** — **GET** `…/members`; owner/admin **POST** `…/members` with `{ "email": "…" }` to add. **PATCH** / **DELETE** `…/members/{userId}` for role (`admin` \| `member`) or removal. Admins cannot change or remove the **owner** or other **admins**.
 - **Groups** (`channels`) — **GET/POST** `…/channels`; **PUT/DELETE** `…/channels/{channelId}` (owner or admin). List/create responses include **`createdAt`**, **`createdBy`** (user id + name fields), and **`createdByDisplay`** (convenience string: full name or username). New groups set **`createdByUserId`** to the creator (owner or admin who called **POST**).
 - **Duplicate group** — **POST** `…/channels/{channelId}/duplicate` (owner or admin). Copies **title** (optional body `{ "title": "…" }` to override), **description**, and **imageUrl** into a **new** empty group: **no** copied members, chat messages, or material shares; invite people via community membership + **POST** `…/channels/{newChannelId}/join`.
 - **Clear group chat** — **DELETE** `…/channels/{channelId}/messages` — **community owner only** (deletes all messages in that channel; members and **material_shares** stay).
-- **Community messages** — **GET/POST** `…/channels/{channelId}/messages` (group membership required); posts follow **text/material** validation (not the same as AI tutor REST chat).
+- **Community messages** — **GET/POST** `…/channels/{channelId}/messages` (group membership required); each message includes **`senderName`** and **`senderRole`** (`owner` \| `admin` \| `member`). Posts follow **text/material** validation (not the same as AI tutor REST chat).
 - **Leave / save** — **POST** `…/leave` with optional `{ "keepSaved": true }` to bookmark after leaving. **POST/DELETE** `…/pin` saves or clears a bookmark while still a member.
 - **Swagger:** see **Communities** tag and `/communities/*` paths in **`GET /openapi.json`** / **`GET /api-docs`** for the full tree.
 

@@ -5,21 +5,22 @@ const { recordDailyStreakActivity } = require("../services/dailyStreakService");
 const { HttpError, notFound, badRequest } = require("../utils/httpError");
 const { viewerHasSharedAccess } = require("../services/sharedMaterialAccess");
 const { createMaterialSharesBatch } = require("../services/materialShareService");
+const { enrichFlashcardSetRow } = require("../services/materialResponse");
 
 exports.list = asyncHandler(async (req, res) => {
   const rows = await prisma.flashcardSet.findMany({
     where: { ...ownedWhere(req), savedAt: { not: null } },
     orderBy: { savedAt: "desc" },
-    include: { flashcards: true },
+    include: { _count: { select: { flashcards: true } } },
   });
-  res.apiSuccess(rows, "OK", 200);
+  res.apiSuccess(rows.map((r) => enrichFlashcardSetRow(r, { includeCards: false })), "OK", 200);
 });
 
 /** `id` is the flashcard set id (same as list items). */
 exports.get = asyncHandler(async (req, res) => {
   const set = await prisma.flashcardSet.findUnique({
     where: { id: req.params.id },
-    include: { flashcards: true },
+    include: { flashcards: { orderBy: { createdAt: "asc" } } },
   });
   if (!set) throw notFound("Flashcard set not found", "FLASHCARD_SET_NOT_FOUND");
   assertOwnedOrAdmin(req, set, "userId");
@@ -31,7 +32,7 @@ exports.get = asyncHandler(async (req, res) => {
       "SAVED_LIBRARY_NOT_SAVED"
     );
   }
-  res.apiSuccess(set, "OK", 200);
+  res.apiSuccess(enrichFlashcardSetRow(set), "OK", 200);
 });
 
 exports.add = asyncHandler(async (req, res) => {
@@ -41,10 +42,10 @@ exports.add = asyncHandler(async (req, res) => {
   const row = await prisma.flashcardSet.update({
     where: { id: flashcardSetId },
     data: { savedAt: new Date() },
-    include: { flashcards: true },
+    include: { flashcards: { orderBy: { createdAt: "asc" } } },
   });
   void recordDailyStreakActivity(set.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
-  res.apiSuccess(row, "OK", 200);
+  res.apiSuccess(enrichFlashcardSetRow(row), "OK", 200);
 });
 
 exports.remove = asyncHandler(async (req, res) => {
@@ -54,10 +55,10 @@ exports.remove = asyncHandler(async (req, res) => {
   const row = await prisma.flashcardSet.update({
     where: { id: req.params.id },
     data: { savedAt: null },
-    include: { flashcards: true },
+    include: { flashcards: { orderBy: { createdAt: "asc" } } },
   });
   void recordDailyStreakActivity(set.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
-  res.apiSuccess(row, "OK", 200);
+  res.apiSuccess(enrichFlashcardSetRow(row), "OK", 200);
 });
 
 exports.share = asyncHandler(async (req, res) => {
@@ -106,9 +107,9 @@ exports.importFromShared = asyncHandler(async (req, res) => {
         })),
       },
     },
-    include: { flashcards: true },
+    include: { flashcards: { orderBy: { createdAt: "asc" } } },
   });
 
   void recordDailyStreakActivity(viewerId).catch((err) => console.error("[dailyStreak]", err?.message || err));
-  res.apiCreated(row, "CREATED");
+  res.apiCreated(enrichFlashcardSetRow(row), "CREATED");
 });

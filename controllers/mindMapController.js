@@ -5,6 +5,8 @@ const { assertOwnedOrAdmin, ownedWhere, isAdmin } = require("../utils/authz");
 const { notFound } = require("../utils/httpError");
 const { viewerHasSharedAccess } = require("../services/sharedMaterialAccess");
 const { createMaterialSharesBatch } = require("../services/materialShareService");
+const { normalizeMindMapCreateBody } = require("../utils/mindMapCreate");
+const { recordDailyStreakActivity } = require("../services/dailyStreakService");
 
 const crud = createCrudHandlers("mindMap", { ownership: { userIdField: "userId" } });
 
@@ -29,7 +31,15 @@ exports.getById = asyncHandler(async (req, res) => {
   res.apiSuccess(row, "OK", 200);
 });
 
-exports.create = asyncHandler(crud.create);
+exports.create = asyncHandler(async (req, res) => {
+  const data = normalizeMindMapCreateBody(req.body);
+  const row = await prisma.mindMap.create({
+    data: { ...data, userId: req.auth.sub },
+  });
+  void recordDailyStreakActivity(req.auth.sub).catch((err) => console.error("[dailyStreak]", err?.message || err));
+  res.apiCreated(row, "CREATED");
+});
+
 exports.update = asyncHandler(crud.update);
 exports.remove = asyncHandler(crud.remove);
 

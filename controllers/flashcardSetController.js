@@ -5,7 +5,7 @@ const { assertOwnedOrAdmin, ownedWhere, isAdmin } = require("../utils/authz");
 const { recordDailyStreakActivity } = require("../services/dailyStreakService");
 const { notFound } = require("../utils/httpError");
 const { viewerHasSharedAccess } = require("../services/sharedMaterialAccess");
-const { createMaterialSharesBatch } = require("../services/materialShareService");
+const { enrichFlashcardSetRow } = require("../services/materialResponse");
 
 const crud = createCrudHandlers("flashcardSet", {
   include: { flashcards: true },
@@ -16,9 +16,9 @@ exports.list = asyncHandler(async (req, res) => {
   const rows = await prisma.flashcardSet.findMany({
     where: ownedWhere(req),
     orderBy: { createdAt: "desc" },
-    include: { flashcards: true },
+    include: { _count: { select: { flashcards: true } } },
   });
-  res.apiSuccess(rows, "OK", 200);
+  res.apiSuccess(rows.map((r) => enrichFlashcardSetRow(r, { includeCards: false })), "OK", 200);
 });
 
 async function assertFlashcardSetReadable(req, set) {
@@ -31,10 +31,10 @@ async function assertFlashcardSetReadable(req, set) {
 exports.getById = asyncHandler(async (req, res) => {
   const row = await prisma.flashcardSet.findUnique({
     where: { id: req.params.id },
-    include: { flashcards: true },
+    include: { flashcards: { orderBy: { createdAt: "asc" } } },
   });
   await assertFlashcardSetReadable(req, row);
-  res.apiSuccess(row, "OK", 200);
+  res.apiSuccess(enrichFlashcardSetRow(row), "OK", 200);
 });
 exports.create = asyncHandler(crud.create);
 exports.update = asyncHandler(crud.update);
@@ -68,7 +68,8 @@ exports.createFlashcard = asyncHandler(async (req, res) => {
   assertOwnedOrAdmin(req, set, "userId");
   const row = await prisma.flashcard.create({
     data: {
-      ...req.body,
+      question: req.body.question,
+      answer: req.body.answer,
       setId: req.params.id,
     },
   });

@@ -17,11 +17,14 @@ exports.remove = asyncHandler(crud.remove);
 
 /** GET /user-preferences/me — includes automatic report email settings. */
 exports.getMe = asyncHandler(async (req, res) => {
-  const pref = await ensureUserPreference(req.auth.sub);
+  const [pref, user] = await Promise.all([
+    ensureUserPreference(req.auth.sub),
+    prisma.user.findUnique({ where: { id: req.auth.sub }, select: { email: true } }),
+  ]);
   res.apiSuccess(
     {
       ...pref,
-      reportEmail: mapReportEmailSettings(pref),
+      reportEmail: mapReportEmailSettings(pref, user?.email),
     },
     "OK",
     200
@@ -32,9 +35,10 @@ exports.getMe = asyncHandler(async (req, res) => {
 exports.patchMe = asyncHandler(async (req, res) => {
   await ensureUserPreference(req.auth.sub);
   const data = buildReportEmailPreferenceUpdate(req.body);
+  const user = await prisma.user.findUnique({ where: { id: req.auth.sub }, select: { email: true } });
   if (!Object.keys(data).length) {
     const pref = await prisma.userPreference.findUnique({ where: { userId: req.auth.sub } });
-    return res.apiSuccess({ ...pref, reportEmail: mapReportEmailSettings(pref) }, "OK", 200);
+    return res.apiSuccess({ ...pref, reportEmail: mapReportEmailSettings(pref, user?.email) }, "OK", 200);
   }
   const pref = await prisma.userPreference.update({
     where: { userId: req.auth.sub },
@@ -43,7 +47,7 @@ exports.patchMe = asyncHandler(async (req, res) => {
   res.apiSuccess(
     {
       ...pref,
-      reportEmail: mapReportEmailSettings(pref),
+      reportEmail: mapReportEmailSettings(pref, user?.email),
     },
     "OK",
     200

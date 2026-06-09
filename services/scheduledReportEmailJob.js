@@ -1,5 +1,6 @@
 const prisma = require("../utils/prisma");
-const { formatIsoDateUtc, utcWeekRangeContaining } = require("./dailyStreakService");
+const { formatIsoDateUtc } = require("./dailyStreakService");
+const { utcWeekRangeContaining } = require("./studyPeriodReportService");
 const { runYourReportExportForUser } = require("./yourReport/yourReportExportService");
 const { smtpConfigured } = require("../utils/reportEmail");
 
@@ -92,7 +93,8 @@ async function runScheduledReportEmails(opts = {}) {
       continue;
     }
 
-    if (!pref.user?.email || pref.user.email.includes("@internal.mishka")) {
+    const recipientEmail = pref.reportEmailRecipient?.trim() || pref.user?.email;
+    if (!recipientEmail || recipientEmail.includes("@internal.mishka")) {
       results.push({ userId: pref.userId, status: "skipped", reason: "no_mailable_email" });
       continue;
     }
@@ -114,6 +116,7 @@ async function runScheduledReportEmails(opts = {}) {
         anchorDate: anchor.anchorDate,
         locale: pref.reportEmailLocale === "ar" ? "ar" : "en",
         delivery: "email",
+        emailTo: recipientEmail,
         periodKey: anchor.periodKey,
       });
       await prisma.userPreference.update({

@@ -885,6 +885,72 @@ const paths = {
     },
   },
 
+  "/communities/recommended": {
+    get: {
+      tags: ["Communities"],
+      summary: "Recommended communities for discovery",
+      description:
+        "Ranked public communities you have not joined. `section`: `for_you` (profile + interests), `popular`, `new`. Each item includes `matchReason`, `matchTags`, `score`.",
+      parameters: [
+        ...lang,
+        { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 50, default: 20 } },
+        { name: "section", in: "query", schema: { type: "string", enum: ["for_you", "popular", "new"], default: "for_you" } },
+        { name: "locale", in: "query", schema: { type: "string", enum: ["en", "ar"] } },
+      ],
+      security: bearer,
+      responses: std(),
+    },
+  },
+  "/communities/discover/categories": {
+    get: {
+      tags: ["Communities"],
+      summary: "Discovery taxonomy (subjects, purposes, education levels, category titles)",
+      description:
+        "Chip labels + public community counts per filter. Includes `categoryTitles` (distinct community category strings visible to you). Use `locale=en|ar` for labels.",
+      parameters: [...lang, { name: "locale", in: "query", schema: { type: "string", enum: ["en", "ar"] } }],
+      security: bearer,
+      responses: std(),
+    },
+  },
+  "/communities/category-titles": {
+    get: {
+      tags: ["Communities"],
+      summary: "Existing community category titles (for create picker)",
+      description:
+        "Distinct `Community.category` values from public communities and communities you belong to. Optional `q` substring filter. Sorted by usage count.",
+      parameters: [
+        ...lang,
+        { name: "q", in: "query", schema: { type: "string", maxLength: 100 } },
+        { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 50 } },
+      ],
+      security: bearer,
+      responses: std(),
+    },
+  },
+  "/communities/discover": {
+    get: {
+      tags: ["Communities"],
+      summary: "Browse / filter public communities",
+      description:
+        "Paginated public communities excluding ones you joined. Filters: `subject`, `educationStatus`, `schoolTrack`, `schoolGrade`, `universityYear`, `purpose`, `localeFilter`, `q`.",
+      parameters: [
+        ...lang,
+        { name: "subject", in: "query", schema: { type: "string" } },
+        { name: "educationStatus", in: "query", schema: { type: "string", enum: ["school", "university", "other"] } },
+        { name: "schoolTrack", in: "query", schema: { type: "string", enum: ["middle_school", "high_school"] } },
+        { name: "schoolGrade", in: "query", schema: { type: "integer" } },
+        { name: "universityYear", in: "query", schema: { type: "integer" } },
+        { name: "purpose", in: "query", schema: { type: "string" } },
+        { name: "localeFilter", in: "query", schema: { type: "string", enum: ["en", "ar"] } },
+        { name: "q", in: "query", schema: { type: "string" } },
+        { name: "limit", in: "query", schema: { type: "integer", default: 20 } },
+        { name: "offset", in: "query", schema: { type: "integer", default: 0 } },
+        { name: "locale", in: "query", schema: { type: "string", enum: ["en", "ar"] } },
+      ],
+      security: bearer,
+      responses: std(),
+    },
+  },
   "/communities": {
     get: {
       tags: ["Communities"],
@@ -899,7 +965,10 @@ const paths = {
       summary: "Create community (you become owner)",
       parameters: lang,
       security: bearer,
-      requestBody: jsonBody("#/components/schemas/JsonRecord", "`name`, `visibility` (`public`|`private`), optional `description`, `imageUrl`, `category`."),
+      requestBody: jsonBody(
+        "#/components/schemas/JsonRecord",
+        "`name`, `visibility` (`public`|`private`), optional `description`, `imageUrl`, `category` (existing title), `newCategoryTitle` (new title — not both), discovery fields."
+      ),
       responses: std({ 201: R.CreatedEnvelope }),
     },
   },
@@ -933,11 +1002,22 @@ const paths = {
   "/communities/{id}/invite": {
     get: {
       tags: ["Communities"],
-      summary: "Get private invite code and token",
-      description: "Owner or community admin; private communities only.",
+      summary: "Get invite / share link (public or private)",
+      description:
+        "Owner/admin. **Public:** `200` with `shareUrl`, `joinPayload: { communityId }`. **Private:** `inviteCode` + `inviteToken`. Not `400` for public.",
       parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
       security: bearer,
       responses: std(),
+    },
+    post: {
+      tags: ["Communities"],
+      summary: "Invite user by email or username (immediate join)",
+      description:
+        "Body: `{ \"email\": \"…\" }` OR `{ \"username\": \"…\" }` (leading `@` optional). Owner/admin only. Immediate join. `400` + `INVITE_SELF_NOT_ALLOWED` for own email/username. `404` + `INVITE_USER_NOT_FOUND` if no account.",
+      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      security: bearer,
+      requestBody: jsonBody("#/components/schemas/CommunityInviteMemberBody", "", { email: "friend@example.com" }),
+      responses: std({ 201: R.CreatedEnvelope, 404: R.NotFoundEnvelope }),
     },
   },
   "/communities/{id}/invite/regenerate": {
@@ -1072,7 +1152,8 @@ const paths = {
     get: {
       tags: ["Communities"],
       summary: "List community group messages",
-      description: "Must have joined the group. Text/material-only rules apply on **POST**.",
+      description:
+        "Must have joined the group. Each message includes `senderName` and `senderRole` (`owner` | `admin` | `member`). Text/material-only rules apply on **POST**.",
       parameters: [
         ...lang,
         { $ref: "#/components/parameters/IdUuid" },
@@ -1084,6 +1165,7 @@ const paths = {
     post: {
       tags: ["Communities"],
       summary: "Post a community group message",
+      description: "Response includes `senderName` and `senderRole` for the author.",
       parameters: [
         ...lang,
         { $ref: "#/components/parameters/IdUuid" },
@@ -1446,17 +1528,25 @@ const paths = {
     post: {
       tags: ["Reports"],
       summary: "Export Your Report PDF (visual, Puppeteer)",
-      description:
-        "HTML/CSS PDF matching app Your Report UI. `period` weekly|monthly|yearly. `delivery` email|download|both. Requires SMTP for email.",
+      description: [
+        "HTML/CSS PDF matching app Your Report UI. `period`: weekly | monthly | yearly.",
+        "**Delivery:** `download` (pdfUrl only), `email` (SMTP), `both`.",
+        "**Recipient:** `emailRecipient`: `account` (signup email) | `custom` (requires `emailTo`).",
+        "If `emailRecipient` omitted: uses `emailTo`, then saved `reportEmailRecipient` from preferences, then account email.",
+        "**Email requires env:** `SMTP_HOST`, `SMTP_FROM` (+ optional `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`). Otherwise **503** `REPORT_EXPORT_EMAIL_NOT_CONFIGURED`.",
+        "**pdfUrl in emails:** set `REPORT_EXPORT_BASE_URL` to public API URL (e.g. ngrok or Railway) so links work from the mail client.",
+      ].join(" "),
       parameters: lang,
       security: bearer,
-      requestBody: jsonBody("#/components/schemas/StudyReportExportBody", "", {
+      requestBody: jsonBody("#/components/schemas/YourReportExportBody", "", {
         period: "weekly",
-        anchorDate: "2026-05-24",
+        anchorDate: "2026-06-01",
         locale: "en",
-        delivery: "email",
+        delivery: "both",
+        emailRecipient: "custom",
+        emailTo: "norhan.moh@gmail.com",
       }),
-      responses: { ...std(), 503: R.ServiceUnavailable },
+      responses: { ...std(), 200: R.YourReportExport200Ok, 503: R.ServiceUnavailable },
     },
   },
   "/reports/your-report/export/{reportId}": {
@@ -1557,7 +1647,7 @@ const paths = {
       summary: "Create flashcard set",
       parameters: lang,
       security: bearer,
-      requestBody: jsonBody("#/components/schemas/JsonRecord", ""),
+      requestBody: jsonBody("#/components/schemas/FlashcardSetCreateBody", "Then add cards via POST /flashcard-sets/{id}/flashcards."),
       responses: std({ 201: R.CreatedEnvelope }),
     },
   },
@@ -1613,7 +1703,7 @@ const paths = {
       summary: "Create flashcard in set",
       parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
       security: bearer,
-      requestBody: jsonBody("#/components/schemas/JsonRecord", "Requires `question`, `answer`; `setId` optional"),
+      requestBody: jsonBody("#/components/schemas/FlashcardNestedCreateBody", "Canonical nested route. `setId` from URL."),
       responses: std({ 201: R.CreatedEnvelope }),
     },
   },
@@ -1671,9 +1761,14 @@ const paths = {
     post: {
       tags: ["Quizzes"],
       summary: "Create quiz",
+      description:
+        "Do **not** send `raw`. Accepted: `title`, `sourceType` (`ai` → stored as `ai_gemini`), optional `totalQuestions`, `chatSessionId`, `sourceReference`, `savedAt`. Add questions via `POST /quiz-questions` or `POST /quizzes/{id}/questions`.",
       parameters: lang,
       security: bearer,
-      requestBody: jsonBody("#/components/schemas/JsonRecord", ""),
+      requestBody: jsonBody(
+        "#/components/schemas/QuizCreateBody",
+        "Response `data.id` is the quiz uuid. Add questions via POST /quiz-questions."
+      ),
       responses: std({ 201: R.CreatedEnvelope }),
     },
   },
@@ -1769,7 +1864,7 @@ const paths = {
       summary: "Create question (requires owned `quizId`)",
       parameters: lang,
       security: bearer,
-      requestBody: jsonBody("#/components/schemas/JsonRecord", ""),
+      requestBody: jsonBody("#/components/schemas/QuizQuestionCreateBody", "Response `data.id` is the question uuid."),
       responses: std({ 201: R.CreatedEnvelope }),
     },
   },
@@ -1899,10 +1994,20 @@ const paths = {
     },
     put: {
       tags: ["Chat messages"],
-      summary: "Update message",
+      summary: "Update message (e.g. tool_preview quiz progress)",
+      description: "Body: `{ \"messageContent\": \"...\" }` only. Owner of parent session required.",
       parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
       security: bearer,
-      requestBody: jsonBody("#/components/schemas/JsonRecord", ""),
+      requestBody: jsonBody("#/components/schemas/JsonRecord", "`messageContent` string (max 100000)."),
+      responses: std(),
+    },
+    patch: {
+      tags: ["Chat messages"],
+      summary: "Patch message (alias of PUT)",
+      description: "Same as PUT — updates `messageContent` for `inputType: tool_preview` progress sync.",
+      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      security: bearer,
+      requestBody: jsonBody("#/components/schemas/JsonRecord", "`messageContent` string."),
       responses: std(),
     },
     delete: {
@@ -1969,7 +2074,7 @@ const paths = {
       summary: "Create summary",
       parameters: lang,
       security: bearer,
-      requestBody: jsonBody("#/components/schemas/JsonRecord", ""),
+      requestBody: jsonBody("#/components/schemas/SummaryCreateBody", "Plain text in `summaryText`. Response `data.id` is summary uuid."),
       responses: std({ 201: R.CreatedEnvelope }),
     },
   },
@@ -2022,9 +2127,10 @@ const paths = {
     post: {
       tags: ["Mind maps"],
       summary: "Create mind map",
+      description: "Stanley AI tree in `content: { title, children[] }`. Response `data.id` is mind map uuid.",
       parameters: lang,
       security: bearer,
-      requestBody: jsonBody("#/components/schemas/JsonRecord", "Typically `title`, `content` (JSON tree), `sourceType`; `userId` set for non-admins."),
+      requestBody: jsonBody("#/components/schemas/MindMapCreateBody", ""),
       responses: std({ 201: R.CreatedEnvelope }),
     },
   },
@@ -2122,6 +2228,40 @@ const paths = {
       parameters: lang,
       security: bearer,
       responses: { ...std(), 200: R.StudyCatalog200Ok },
+    },
+  },
+  "/student-subjects": {
+    get: {
+      tags: ["Student Subjects"],
+      summary: "List my course subjects",
+      parameters: lang,
+      security: bearer,
+      responses: std(),
+    },
+    post: {
+      tags: ["Student Subjects"],
+      summary: "Create a course subject",
+      parameters: lang,
+      security: bearer,
+      requestBody: jsonBody("#/components/schemas/StudentSubjectCreateBody", "", { name: "Physics", color: "#4E7DBA" }),
+      responses: std({ 201: R.CreatedEnvelope }),
+    },
+  },
+  "/student-subjects/{id}": {
+    patch: {
+      tags: ["Student Subjects"],
+      summary: "Update subject name, color, or sort order",
+      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      security: bearer,
+      requestBody: jsonBody("#/components/schemas/StudentSubjectUpdateBody"),
+      responses: std(),
+    },
+    delete: {
+      tags: ["Student Subjects"],
+      summary: "Soft-delete subject",
+      parameters: [...lang, { $ref: "#/components/parameters/IdUuid" }],
+      security: bearer,
+      responses: std(),
     },
   },
   "/study-with-mishka/custom-timers": {
@@ -2633,11 +2773,15 @@ const paths = {
     get: {
       tags: ["User preferences"],
       summary: "My preferences (incl. automatic report email)",
-      description:
-        "Returns preference row plus `reportEmail`: `reportEmailAutoEnabled`, `reportEmailFrequency` (`weekly`|`monthly`|null), `reportEmailLocale`, `reportEmailLastSentAt`.",
+      description: [
+        "Returns preference row plus nested **`reportEmail`**:",
+        "`accountEmail`, `reportEmailRecipient`, `usingCustomRecipient`, `effectiveRecipientEmail`,",
+        "`reportEmailAutoEnabled`, `reportEmailFrequency` (weekly|monthly|null), `reportEmailLocale`, `reportEmailLastSentAt`.",
+        "**Two recipient options:** `reportEmailRecipient: null` = account email; set string = custom email for auto-send.",
+      ].join(" "),
       parameters: lang,
       security: bearer,
-      responses: std(),
+      responses: { ...std(), 200: R.UserPreferenceMe200Ok },
     },
     patch: {
       tags: ["User preferences"],
@@ -2646,6 +2790,8 @@ const paths = {
         "Enable: `{ \"reportEmailAutoEnabled\": true, \"reportEmailFrequency\": \"weekly\" }` (or `monthly`).",
         "Disable: `{ \"reportEmailAutoEnabled\": false }`.",
         "Optional `reportEmailLocale`: `en` | `ar`.",
+        "**Recipient:** `reportEmailRecipient: null` = account email; `\"user@example.com\"` = custom. Send `null` to switch back to account email.",
+        "Scheduled auto-send uses `effectiveRecipientEmail` (custom if saved, else account). Cron is server-side — not part of Flutter API.",
       ].join(" "),
       parameters: lang,
       security: bearer,
@@ -2653,8 +2799,9 @@ const paths = {
         reportEmailAutoEnabled: true,
         reportEmailFrequency: "weekly",
         reportEmailLocale: "en",
+        reportEmailRecipient: "norhan.moh@gmail.com",
       }),
-      responses: std(),
+      responses: { ...std(), 200: R.UserPreferenceMe200Ok },
     },
   },
 

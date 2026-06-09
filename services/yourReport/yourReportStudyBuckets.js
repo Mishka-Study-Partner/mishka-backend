@@ -32,7 +32,6 @@ async function loadSessions(userId, rangeStart, rangeEnd) {
     where: { userId, startedAt: { gte: start, lt: end } },
     select: {
       startedAt: true,
-      approximateMainStudySeconds: true,
       totalPausedSeconds: true,
       totalCallBreakSeconds: true,
       endedAt: true,

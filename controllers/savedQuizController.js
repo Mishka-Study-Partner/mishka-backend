@@ -5,21 +5,22 @@ const { recordDailyStreakActivity } = require("../services/dailyStreakService");
 const { HttpError, notFound, badRequest } = require("../utils/httpError");
 const { viewerHasSharedAccess } = require("../services/sharedMaterialAccess");
 const { createMaterialSharesBatch } = require("../services/materialShareService");
+const { enrichQuizRow } = require("../services/materialResponse");
 
 exports.list = asyncHandler(async (req, res) => {
   const rows = await prisma.quiz.findMany({
     where: { ...ownedWhere(req), savedAt: { not: null } },
     orderBy: { savedAt: "desc" },
-    include: { questions: true },
+    include: { _count: { select: { questions: true } } },
   });
-  res.apiSuccess(rows, "OK", 200);
+  res.apiSuccess(rows.map((r) => enrichQuizRow(r, { includeQuestions: false })), "OK", 200);
 });
 
 /** `id` is the quiz id (same as list items). Full quiz + questions when still saved. */
 exports.get = asyncHandler(async (req, res) => {
   const quiz = await prisma.quiz.findUnique({
     where: { id: req.params.id },
-    include: { questions: true },
+    include: { questions: { orderBy: { createdAt: "asc" } } },
   });
   if (!quiz) throw notFound("Quiz not found", "QUIZ_NOT_FOUND");
   assertOwnedOrAdmin(req, quiz, "userId");
@@ -31,7 +32,7 @@ exports.get = asyncHandler(async (req, res) => {
       "SAVED_LIBRARY_NOT_SAVED"
     );
   }
-  res.apiSuccess(quiz, "OK", 200);
+  res.apiSuccess(enrichQuizRow(quiz), "OK", 200);
 });
 
 exports.add = asyncHandler(async (req, res) => {
@@ -41,10 +42,10 @@ exports.add = asyncHandler(async (req, res) => {
   const row = await prisma.quiz.update({
     where: { id: quizId },
     data: { savedAt: new Date() },
-    include: { questions: true },
+    include: { questions: { orderBy: { createdAt: "asc" } } },
   });
   void recordDailyStreakActivity(quiz.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
-  res.apiSuccess(row, "OK", 200);
+  res.apiSuccess(enrichQuizRow(row), "OK", 200);
 });
 
 exports.remove = asyncHandler(async (req, res) => {
@@ -54,10 +55,10 @@ exports.remove = asyncHandler(async (req, res) => {
   const row = await prisma.quiz.update({
     where: { id: req.params.id },
     data: { savedAt: null },
-    include: { questions: true },
+    include: { questions: { orderBy: { createdAt: "asc" } } },
   });
   void recordDailyStreakActivity(quiz.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
-  res.apiSuccess(row, "OK", 200);
+  res.apiSuccess(enrichQuizRow(row), "OK", 200);
 });
 
 exports.share = asyncHandler(async (req, res) => {
@@ -111,9 +112,9 @@ exports.importFromShared = asyncHandler(async (req, res) => {
         })),
       },
     },
-    include: { questions: true },
+    include: { questions: { orderBy: { createdAt: "asc" } } },
   });
 
   void recordDailyStreakActivity(viewerId).catch((err) => console.error("[dailyStreak]", err?.message || err));
-  res.apiCreated(row, "CREATED");
+  res.apiCreated(enrichQuizRow(row), "CREATED");
 });

@@ -44,8 +44,10 @@
 
 - HTML/CSS matches Flutter tokens (§5 in original spec from Flutter team)
 - **Pridi** via Google Fonts in PDF HTML
+- **Layout:** full A4 width, cream `#FFFDFA` edge-to-edge (no white margins), **single page** whose height grows with content (no page breaks)
 - Charts: vertical study bars, 3 AI rings, horizontal task bars, streak week row (weekly)
 - Assets: copy `app-logo.png` / `streak_today.png` to `assets/reports/` (see README there)
+- Optional: `REPORT_PDF_WIDTH_PX` (default `794`) for viewport width
 
 ## Ops
 

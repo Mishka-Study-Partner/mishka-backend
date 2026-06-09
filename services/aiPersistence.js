@@ -175,6 +175,7 @@ async function persistChatSuccess(userId, sessionId, message, upstreamStatus, up
 
 /**
  * FastAPI `/generate-tools` returns `{ status, tool_type, content }` on success.
+ * Also persists a `tool_preview` chat message for Flutter timeline + progress sync.
  */
 async function persistGenerateToolsSuccess(userId, sessionId, toolType, complexity, upstreamStatus, upstreamData) {
   const parsed = parseGenerateToolsSuccessBody(upstreamData);
@@ -182,9 +183,11 @@ async function persistGenerateToolsSuccess(userId, sessionId, toolType, complexi
     throw new Error("UPSTREAM_TOOL_TYPE_MISMATCH");
   }
 
+  let toolPreviewMessageId;
+
   await prisma.$transaction(async (tx) => {
     await assertAiTutorSession(tx, sessionId, userId);
-    const aiRow = await createAiRequestRow({
+    await createAiRequestRow({
       tx,
       userId,
       chatSessionId: sessionId,
@@ -213,7 +216,25 @@ async function persistGenerateToolsSuccess(userId, sessionId, toolType, complexi
         },
       });
     }
+
+    const materialId = result.quizId || result.flashcardSetId || result.mindMapId || null;
+    const previewPayload =
+      upstreamData && typeof upstreamData === "object"
+        ? { ...upstreamData, materialId }
+        : { status: "success", tool_type: toolType, content: parsed.content, materialId };
+
+    const msg = await tx.chatMessage.create({
+      data: {
+        sessionId,
+        senderType: "ai",
+        messageContent: JSON.stringify(previewPayload).slice(0, 100000),
+        inputType: "tool_preview",
+      },
+    });
+    toolPreviewMessageId = msg.id;
   });
+
+  return { toolPreviewMessageId };
 }
 
 module.exports = {

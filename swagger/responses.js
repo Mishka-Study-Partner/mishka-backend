@@ -315,6 +315,18 @@ const StudyReportExport200Ok = successEnvelope(
   Ex.studyReportExportDataMinimal
 );
 
+const YourReportExport200Ok = successEnvelope(
+  "200 OK",
+  "Visual Your Report PDF. `emailedTo` set when delivery is email or both (requires SMTP).",
+  Ex.yourReportExportDataMinimal
+);
+
+const UserPreferenceMe200Ok = successEnvelope(
+  "200 OK",
+  "Preference row plus nested `reportEmail` (account vs custom recipient fields).",
+  Ex.userPreferenceMeDataMinimal
+);
+
 const StudyTelemetry200Ok = successEnvelope(
   "200 OK",
   `{ inserted: <number of rows accepted> }. ${MishkaI18nTail}`,
@@ -398,6 +410,8 @@ module.exports = {
   AiUsageReport200Ok,
   DailyStreakHistory200Ok,
   StudyReportExport200Ok,
+  YourReportExport200Ok,
+  UserPreferenceMe200Ok,
   StudyTelemetry200Ok,
   StudyMlReportCreated201Ok,
   StudyCheckInCreated201Ok,

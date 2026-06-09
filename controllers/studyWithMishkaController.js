@@ -15,7 +15,12 @@ const {
 } = require("../services/studyPeriodReportService");
 const { parseReportTopLevelMode } = require("../utils/studyReportMode");
 const { createExport, resolveExportAccess, pdfPath: exportPdfPath } = require("../services/studyReportExportService");
+const { assertActiveSubjectForUser } = require("../services/studentSubjectService");
 const fs = require("fs");
+
+const SESSION_SUBJECT_INCLUDE = {
+  studentSubject: { select: { id: true, name: true, color: true } },
+};
 
 function studyReportOptions(req) {
   const { mode, explicitAll } = parseReportTopLevelMode(req.query.topLevelMode);
@@ -30,7 +35,10 @@ function catalogMode(id) {
 async function loadOwnedSession(req, sessionId) {
   const row = await prisma.studyConcentrationSession.findUnique({
     where: { id: sessionId },
-    include: { checkIns: { orderBy: { createdAt: "desc" }, take: 100 } },
+    include: {
+      checkIns: { orderBy: { createdAt: "desc" }, take: 100 },
+      ...SESSION_SUBJECT_INCLUDE,
+    },
   });
   if (!row || row.userId !== req.auth.sub) throw notFound();
   return row;
@@ -43,16 +51,31 @@ async function assertOwnedTask(userId, taskId) {
 }
 
 function enrichSession(row) {
-  const base = { ...row };
+  const { studentSubject, checkIns, ...rest } = row;
   let suggestion = null;
   if (row.concentrationPreset === "flowtime") {
     suggestion = flowtimeSuggestion(row.lastCompletedFocusMinutes);
   }
   return {
-    ...base,
+    ...rest,
+    ...(checkIns !== undefined ? { checkIns } : {}),
+    studentSubjectId: row.studentSubjectId ?? null,
+    studentSubjectName: studentSubject?.name ?? null,
+    studentSubjectColor: studentSubject?.color ?? null,
     flowtimeBreakSuggestion: suggestion,
     timerState: computeStudyTimerState(row),
   };
+}
+
+async function updateSession(sessionId, data) {
+  return prisma.studyConcentrationSession.update({
+    where: { id: sessionId },
+    data,
+    include: {
+      checkIns: { orderBy: { createdAt: "desc" }, take: 100 },
+      ...SESSION_SUBJECT_INCLUDE,
+    },
+  });
 }
 
 exports.getCatalog = asyncHandler(async (_req, res) => {
@@ -195,6 +218,7 @@ exports.listSessions = asyncHandler(async (req, res) => {
     where: { userId: req.auth.sub },
     orderBy: { startedAt: "desc" },
     take: 80,
+    include: SESSION_SUBJECT_INCLUDE,
   });
   res.apiSuccess(rows.map(enrichSession), "OK", 200);
 });
@@ -311,6 +335,12 @@ exports.startSession = asyncHandler(async (req, res) => {
     body.clientAppVersion != null ? String(body.clientAppVersion).trim().slice(0, 40) || null : null;
   const platform = body.platform != null ? String(body.platform).trim().slice(0, 40) || null : null;
 
+  let studentSubjectId = null;
+  if (body.studentSubjectId) {
+    await assertActiveSubjectForUser(req.auth.sub, body.studentSubjectId);
+    studentSubjectId = body.studentSubjectId;
+  }
+
   const plan = planFromPreset(body, presetRow);
 
   const now = new Date();
@@ -337,9 +367,11 @@ exports.startSession = asyncHandler(async (req, res) => {
         currentPhaseStartedAt: now,
         ...(tags.length ? { tags } : {}),
         ...(linkedTaskId ? { linkedTaskId } : {}),
+        ...(studentSubjectId ? { studentSubjectId } : {}),
         ...(clientAppVersion ? { clientAppVersion } : {}),
         ...(platform ? { platform } : {}),
       },
+      include: SESSION_SUBJECT_INCLUDE,
     });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError) {
@@ -369,10 +401,7 @@ exports.startSession = asyncHandler(async (req, res) => {
 exports.pauseSession = asyncHandler(async (req, res) => {
   const row = await loadOwnedSession(req, req.params.id);
   if (row.status !== "active") throw badRequest("Session is not active", undefined, "VALIDATION_ERROR");
-  const updated = await prisma.studyConcentrationSession.update({
-    where: { id: row.id },
-    data: { status: "paused", pausedAt: new Date() },
-  });
+  const updated = await updateSession(row.id, { status: "paused", pausedAt: new Date() });
   res.apiSuccess(enrichSession(updated), "OK", 200);
 });
 
@@ -383,14 +412,11 @@ exports.resumeSession = asyncHandler(async (req, res) => {
   if (row.pausedAt) {
     addPause = Math.max(0, Math.floor((Date.now() - row.pausedAt.getTime()) / 1000));
   }
-  const updated = await prisma.studyConcentrationSession.update({
-    where: { id: row.id },
-    data: {
-      status: "active",
-      pausedAt: null,
-      totalPausedSeconds: row.totalPausedSeconds + addPause,
-      currentPhaseStartedAt: row.currentPhaseStartedAt ?? new Date(),
-    },
+  const updated = await updateSession(row.id, {
+    status: "active",
+    pausedAt: null,
+    totalPausedSeconds: row.totalPausedSeconds + addPause,
+    currentPhaseStartedAt: row.currentPhaseStartedAt ?? new Date(),
   });
   res.apiSuccess(enrichSession(updated), "OK", 200);
 });
@@ -420,16 +446,13 @@ exports.endSession = asyncHandler(async (req, res) => {
   const outcomeNotes =
     req.body?.outcomeNotes != null ? String(req.body.outcomeNotes).trim().slice(0, 2000) : undefined;
 
-  const updated = await prisma.studyConcentrationSession.update({
-    where: { id: row.id },
-    data: {
-      status: outcome,
-      endedAt: new Date(),
-      pausedAt: null,
-      totalPausedSeconds: row.totalPausedSeconds + addPause,
-      ...(outcomeNotes !== undefined && outcomeNotes !== "" ? { outcomeNotes } : {}),
-      ...clearBreak,
-    },
+  const updated = await updateSession(row.id, {
+    status: outcome,
+    endedAt: new Date(),
+    pausedAt: null,
+    totalPausedSeconds: row.totalPausedSeconds + addPause,
+    ...(outcomeNotes !== undefined && outcomeNotes !== "" ? { outcomeNotes } : {}),
+    ...clearBreak,
   });
   if (outcome === "completed") {
     void recordDailyStreakActivity(req.auth.sub).catch((err) => console.error("[dailyStreak]", err?.message || err));
@@ -464,10 +487,7 @@ exports.advancePhase = asyncHandler(async (req, res) => {
     data.lastCompletedFocusMinutes = actualFocusMinutes;
   }
 
-  const updated = await prisma.studyConcentrationSession.update({
-    where: { id: row.id },
-    data,
-  });
+  const updated = await updateSession(row.id, data);
   res.apiSuccess(enrichSession(updated), "OK", 200);
 });
 
@@ -579,11 +599,16 @@ exports.patchSession = asyncHandler(async (req, res) => {
         ? null
         : String(body.platform).trim().slice(0, 40) || null;
   }
+  if (Object.prototype.hasOwnProperty.call(body, "studentSubjectId")) {
+    if (body.studentSubjectId === null) {
+      data.studentSubjectId = null;
+    } else {
+      await assertActiveSubjectForUser(req.auth.sub, body.studentSubjectId);
+      data.studentSubjectId = body.studentSubjectId;
+    }
+  }
 
-  const updated = await prisma.studyConcentrationSession.update({
-    where: { id: row.id },
-    data,
-  });
+  const updated = await updateSession(row.id, data);
   res.apiSuccess(enrichSession(updated), "OK", 200);
 });
 
@@ -594,10 +619,7 @@ exports.callBreakStart = asyncHandler(async (req, res) => {
   }
   if (row.status !== "active") throw badRequest("Session must be active", undefined, "VALIDATION_ERROR");
   if (row.callBreakActive) throw badRequest("Call break already active", undefined, "VALIDATION_ERROR");
-  const updated = await prisma.studyConcentrationSession.update({
-    where: { id: row.id },
-    data: { callBreakActive: true, callBreakStartedAt: new Date() },
-  });
+  const updated = await updateSession(row.id, { callBreakActive: true, callBreakStartedAt: new Date() });
   res.apiSuccess(enrichSession(updated), "OK", 200);
 });
 
@@ -615,13 +637,10 @@ exports.callBreakEnd = asyncHandler(async (req, res) => {
   } else {
     sec = 0;
   }
-  const updated = await prisma.studyConcentrationSession.update({
-    where: { id: row.id },
-    data: {
-      callBreakActive: false,
-      callBreakStartedAt: null,
-      totalCallBreakSeconds: row.totalCallBreakSeconds + sec,
-    },
+  const updated = await updateSession(row.id, {
+    callBreakActive: false,
+    callBreakStartedAt: null,
+    totalCallBreakSeconds: row.totalCallBreakSeconds + sec,
   });
   res.apiSuccess(enrichSession(updated), "OK", 200);
 });

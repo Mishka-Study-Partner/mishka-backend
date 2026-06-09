@@ -47,13 +47,9 @@ exports.update = asyncHandler(async (req, res) => {
   const existing = await loadMessageWithSession(req.params.id);
   if (!existing?.session) throw notFound();
   assertOwnedOrAdmin(req, existing.session, "userId");
-  const data = { ...req.body };
-  if (!data || typeof data !== "object" || Object.keys(data).length === 0) {
-    throw badRequest("No fields to update", undefined, "VALIDATION_ERROR");
-  }
   const row = await prisma.chatMessage.update({
     where: { id: req.params.id },
-    data,
+    data: req.body,
   });
   void recordDailyStreakActivity(existing.session.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
   res.apiSuccess(row, "OK", 200);

@@ -6,7 +6,9 @@ const { recordDailyStreakActivity } = require("../services/dailyStreakService");
 const { notFound, badRequest } = require("../utils/httpError");
 const { viewerHasSharedAccess } = require("../services/sharedMaterialAccess");
 const { createMaterialSharesBatch } = require("../services/materialShareService");
+const { enrichQuizRow } = require("../services/materialResponse");
 const { gradeQuizAnswers } = require("../services/quizScoreService");
+const { mapQuizQuestionBody } = require("../utils/quizQuestionMapper");
 
 const crud = createCrudHandlers("quiz", {
   include: { questions: true },
@@ -17,9 +19,9 @@ exports.list = asyncHandler(async (req, res) => {
   const rows = await prisma.quiz.findMany({
     where: ownedWhere(req),
     orderBy: { createdAt: "desc" },
-    include: { questions: true },
+    include: { _count: { select: { questions: true } } },
   });
-  res.apiSuccess(rows, "OK", 200);
+  res.apiSuccess(rows.map((r) => enrichQuizRow(r, { includeQuestions: false })), "OK", 200);
 });
 
 async function assertQuizReadable(req, quiz) {
@@ -32,13 +34,30 @@ async function assertQuizReadable(req, quiz) {
 exports.getById = asyncHandler(async (req, res) => {
   const row = await prisma.quiz.findUnique({
     where: { id: req.params.id },
-    include: { questions: true },
+    include: { questions: { orderBy: { createdAt: "asc" } } },
   });
   await assertQuizReadable(req, row);
+  res.apiSuccess(enrichQuizRow(row), "OK", 200);
+});
+exports.create = asyncHandler(async (req, res) => {
+  const row = await prisma.quiz.create({
+    data: { ...req.body, userId: req.auth.sub },
+    include: { questions: true },
+  });
+  void recordDailyStreakActivity(req.auth.sub).catch((err) => console.error("[dailyStreak]", err?.message || err));
+  res.apiCreated(enrichQuizRow(row), "CREATED");
+});
+exports.update = asyncHandler(async (req, res) => {
+  const existing = await prisma.quiz.findUnique({ where: { id: req.params.id } });
+  assertOwnedOrAdmin(req, existing, "userId");
+  const row = await prisma.quiz.update({
+    where: { id: req.params.id },
+    data: req.body,
+    include: { questions: true },
+  });
+  void recordDailyStreakActivity(existing.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
   res.apiSuccess(row, "OK", 200);
 });
-exports.create = asyncHandler(crud.create);
-exports.update = asyncHandler(crud.update);
 exports.remove = asyncHandler(crud.remove);
 
 exports.listQuestions = asyncHandler(async (req, res) => {
@@ -67,11 +86,14 @@ exports.shareToChannels = asyncHandler(async (req, res) => {
 exports.createQuestion = asyncHandler(async (req, res) => {
   const quiz = await prisma.quiz.findUnique({ where: { id: req.params.id } });
   assertOwnedOrAdmin(req, quiz, "userId");
-  const row = await prisma.quizQuestion.create({
-    data: {
-      ...req.body,
-      quizId: req.params.id,
-    },
+  const data = mapQuizQuestionBody({ ...req.body, quizId: req.params.id });
+  const row = await prisma.$transaction(async (tx) => {
+    const q = await tx.quizQuestion.create({ data });
+    await tx.quiz.update({
+      where: { id: req.params.id },
+      data: { totalQuestions: { increment: 1 } },
+    });
+    return q;
   });
   void recordDailyStreakActivity(quiz.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
   res.apiCreated(row, "CREATED");

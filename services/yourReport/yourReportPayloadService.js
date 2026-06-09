@@ -6,6 +6,7 @@ const { buildTaskCompletionsReport } = require("../taskCompletionsReportService"
 const { labelsFor, sectionSuffix, weekdayLabels, MONTHS_EN, MONTHS_AR } = require("./yourReportLabels");
 const { resolvePeriodWindow, formatPeriodLabel } = require("./yourReportPeriod");
 const { buildStudyBuckets } = require("./yourReportStudyBuckets");
+const { buildStudyBySubject } = require("./yourReportStudyBySubject");
 
 const AI_GOALS = { daily: 1, weekly: 7, monthly: 28, yearly: 365 };
 
@@ -89,8 +90,9 @@ async function buildYourReportPayload(userId, opts) {
       ? getSummary(userId, window.weekStart)
       : Promise.resolve(null);
 
-  const [studyBuckets, aiRaw, taskReport, streakSummary, streakHistory] = await Promise.all([
+  const [studyBuckets, studyBySubject, aiRaw, taskReport, streakSummary, streakHistory] = await Promise.all([
     buildStudyBuckets(userId, period, window, locale),
+    buildStudyBySubject(userId, window.rangeStart, window.rangeEnd, locale),
     buildAiUsageReport(userId, window.from, window.to),
     buildTaskCompletionsReport(userId, window.from, window.to, "day"),
     streakSummaryPromise,
@@ -122,6 +124,7 @@ async function buildYourReportPayload(userId, opts) {
       ...labels,
       sectionSuffix: suffix,
       studyTitle: `${labels.reportStudyWithMishka} (${suffix})`,
+      studyBySubjectTitle: `${labels.reportStudyBySubject} (${suffix})`,
       aiTitle: `${labels.reportAiTools} (${suffix})`,
       streakTitle: `${labels.reportDailyStreak} (${suffix})`,
       tasksTitle: `${labels.reportTasksDue} (${suffix})`,
@@ -130,6 +133,7 @@ async function buildYourReportPayload(userId, opts) {
     study: {
       subtitle: labels.reportDuringConcentrationMode,
       buckets: studyBuckets.map((b) => ({ label: b.label, value: Math.round(b.value * 10) / 10 })),
+      bySubject: studyBySubject,
     },
     aiTools: {
       quizzes,

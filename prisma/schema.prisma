@@ -98,6 +98,16 @@ enum CommunityMemberRole {
   member
 }
 
+enum CommunityPurpose {
+  study_group
+  material_sharing
+  accountability
+  exam_cohort
+  university_program
+  language_practice
+  general
+}
+
 // --- Users (merged: signup + profile + most complete ERD) ---
 
 model User {
@@ -149,6 +159,7 @@ model User {
   tasks               Task[]
   studyCustomTimerPresets        StudyCustomTimerPreset[]
   studyConcentrationSessions     StudyConcentrationSession[]
+  studentSubjects                StudentSubject[]
   usageLedger         UserUsageLedger[]
   usageDailyRollups   UserUsageDailyRollup[]
   materialShares           MaterialShare[]
@@ -216,6 +227,8 @@ model UserPreference {
   reportEmailLocale    String   @default("en") @map("report_email_locale") @db.VarChar(5)
   reportEmailLastSentAt DateTime? @map("report_email_last_sent_at")
   reportEmailLastPeriodKey String? @map("report_email_last_period_key") @db.VarChar(32)
+  /// Optional override for scheduled/manual report email delivery (defaults to user account email).
+  reportEmailRecipient   String?  @map("report_email_recipient") @db.VarChar(200)
   updatedAt              DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -378,6 +391,24 @@ model StudyCustomTimerPreset {
   @@map("study_custom_timer_presets")
 }
 
+/// Student-defined course/subject for per-subject study time (e.g. Physics, Arabic).
+model StudentSubject {
+  id        String    @id @default(uuid()) @map("subject_id")
+  userId    String    @map("user_id")
+  name      String    @db.VarChar(100)
+  color     String?   @db.VarChar(7)
+  sortOrder Int       @default(0) @map("sort_order")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  user     User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions StudyConcentrationSession[]
+
+  @@index([userId, sortOrder])
+  @@map("student_subjects")
+}
+
 /// Active / completed concentration or “call with Mishka” timed block (pause / resume / end).
 model StudyConcentrationSession {
   id                    String                   @id @default(uuid()) @map("session_id")
@@ -415,6 +446,8 @@ model StudyConcentrationSession {
   tags Json? @map("tags")
   /// Linked todo task (same owner).
   linkedTaskId String? @map("linked_task_id")
+  /// Optional student course/subject for per-subject study reports.
+  studentSubjectId String? @map("student_subject_id")
   /// Optional reflection when ending session.
   outcomeNotes String? @map("outcome_notes") @db.VarChar(2000)
   clientAppVersion String? @map("client_app_version") @db.VarChar(40)
@@ -426,6 +459,7 @@ model StudyConcentrationSession {
   user           User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   customPreset   StudyCustomTimerPreset?    @relation(fields: [customPresetId], references: [id], onDelete: SetNull)
   linkedTask     Task?                      @relation(fields: [linkedTaskId], references: [id], onDelete: SetNull)
+  studentSubject StudentSubject?            @relation(fields: [studentSubjectId], references: [id], onDelete: SetNull)
   checkIns       StudyConcentrationCheckIn[]
   activityEvents StudySessionActivityEvent[]
   mlReports      StudySessionMlReport[]
@@ -433,6 +467,7 @@ model StudyConcentrationSession {
   @@index([userId, status])
   @@index([userId, startedAt(sort: Desc)])
   @@index([linkedTaskId])
+  @@index([studentSubjectId])
   @@map("study_concentration_sessions")
 }
 
@@ -490,6 +525,17 @@ model Community {
   description String?
   imageUrl    String?             @map("image_url") @db.VarChar(500)
   visibility  CommunityVisibility @default(public)
+  /// Discovery: target education level (matches user profile).
+  educationStatus EducationStatus? @map("education_status")
+  schoolTrack       SchoolTrack?     @map("school_track")
+  schoolGrade       Int?             @map("school_grade")
+  universityYear    Int?             @map("university_year")
+  /// Subject slugs for browse/recommend, e.g. physics, math (see communityDiscoverTaxonomy).
+  subjectKeys       String[]         @default([]) @map("subject_keys")
+  purpose           CommunityPurpose? @default(general)
+  locale            String           @default("en") @map("locale") @db.VarChar(5)
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
   /// Creator / sole owner (cannot be demoted by admins).
   ownerUserId String?             @map("owner_user_id")
   /// Short code for private join (optional until private created).
@@ -503,6 +549,8 @@ model Community {
   savedByUsers UserSavedCommunity[]
 
   @@index([ownerUserId])
+  @@index([visibility, educationStatus])
+  @@index([createdAt])
   @@map("communities")
 }
 

@@ -1,13 +1,35 @@
 const axios = require("axios");
 const FormData = require("form-data");
 const asyncHandler = require("../utils/asyncHandler");
-const { HttpError } = require("../utils/httpError");
+const { HttpError, notFound } = require("../utils/httpError");
 const { preferredLanguage } = require("../utils/locale");
 const { messagesForCode } = require("../utils/errorMessages");
 const { persistUploadSuccess, persistChatSuccess, persistGenerateToolsSuccess } = require("../services/aiPersistence");
 const { recordDailyStreakActivity } = require("../services/dailyStreakService");
+const prisma = require("../utils/prisma");
 
 const AI_BASE = () => process.env.AI_SERVICE_URL || "";
+
+async function assertUserChatSession(userId, sessionId) {
+  const session = await prisma.chatSession.findFirst({
+    where: { id: sessionId, userId },
+  });
+  if (!session) throw notFound("Chat session not found", "CHAT_SESSION_NOT_FOUND");
+  return session;
+}
+
+function throwIfAiSessionNotFound(upstreamStatus, upstreamBody) {
+  if (upstreamStatus !== 404) return;
+  const detail = typeof upstreamBody?.detail === "string" ? upstreamBody.detail : "";
+  if (/session not found/i.test(detail)) {
+    throw new HttpError(
+      404,
+      "AI tutor session expired or not found — start a new chat or re-upload your file",
+      { upstream: upstreamBody },
+      "AI_SESSION_NOT_FOUND"
+    );
+  }
+}
 
 function normalizeAiPayload(data) {
   if (data == null) return null;
@@ -92,10 +114,13 @@ exports.chat = asyncHandler(async (req, res) => {
   }
 
   const { session_id, message } = req.body;
+  await assertUserChatSession(req.auth.sub, session_id);
   const r = await axios.post(`${AI_BASE()}/chat`, null, {
     params: { session_id, message },
     validateStatus: () => true,
   });
+
+  throwIfAiSessionNotFound(r.status, normalizeAiPayload(r.data));
 
   if (r.status >= 200 && r.status < 300) {
     try {
@@ -117,14 +142,19 @@ exports.generateTools = asyncHandler(async (req, res) => {
   const { session_id, tool_type, complexity: complexityRaw } = req.body;
   const complexity = complexityRaw ?? "Intermediate";
 
+  await assertUserChatSession(req.auth.sub, session_id);
+
   const r = await axios.post(`${AI_BASE()}/generate-tools`, null, {
     params: { session_id, tool_type, complexity },
     validateStatus: () => true,
   });
 
+  throwIfAiSessionNotFound(r.status, normalizeAiPayload(r.data));
+
   if (r.status >= 200 && r.status < 300) {
+    let persistMeta = {};
     try {
-      await persistGenerateToolsSuccess(
+      persistMeta = await persistGenerateToolsSuccess(
         req.auth.sub,
         session_id,
         tool_type,
@@ -136,7 +166,11 @@ exports.generateTools = asyncHandler(async (req, res) => {
       console.error("[ai] persist generate-tools failed", e);
     }
     void recordDailyStreakActivity(req.auth.sub).catch((err) => console.error("[dailyStreak]", err?.message || err));
-    return res.status(r.status).json(successEnvelope(req, r.data, r.status));
+    const payload = normalizeAiPayload(r.data);
+    if (payload && typeof payload === "object" && persistMeta.toolPreviewMessageId) {
+      payload.tool_preview_message_id = persistMeta.toolPreviewMessageId;
+    }
+    return res.status(r.status).json(successEnvelope(req, payload, r.status));
   }
   return res.status(r.status >= 400 ? r.status : 502).json(errorEnvelope(req, r.status, r.data));
 });

@@ -1,5 +1,7 @@
 ﻿const { z } = require("zod");
 const { refineEducationFields } = require("../utils/educationProfile");
+const { COMMUNITY_SUBJECT_KEYS, COMMUNITY_PURPOSE_KEYS } = require("../utils/communityDiscoverTaxonomy");
+const { normalizeMaterialSourceType } = require("../utils/aiMaterialSourceType");
 
 /** Password: 8–20 chars, at least one upper, one lower, one special (non-alphanumeric). */
 const passwordPolicy = z
@@ -445,8 +447,29 @@ const studySessionPatchSchema = z
     title: z.string().max(200).optional().nullable(),
     tags: z.array(z.string().max(80)).max(20).optional(),
     linkedTaskId: z.union([z.string().uuid(), z.null()]).optional(),
+    studentSubjectId: z.union([z.string().uuid(), z.null()]).optional(),
     clientAppVersion: z.string().max(40).optional().nullable(),
     platform: z.string().max(40).optional().nullable(),
+  })
+  .strict()
+  .refine((o) => Object.keys(o).length > 0, { message: "At least one field is required" });
+
+const studentSubjectCreateSchema = z
+  .object({
+    name: z.string().min(1).max(100),
+    color: z
+      .string()
+      .regex(/^#[0-9A-Fa-f]{6}$/)
+      .optional()
+      .nullable(),
+  })
+  .strict();
+
+const studentSubjectUpdateSchema = z
+  .object({
+    name: z.string().min(1).max(100).optional(),
+    color: z.union([z.string().regex(/^#[0-9A-Fa-f]{6}$/), z.null()]).optional(),
+    sortOrder: z.number().int().min(0).max(999).optional(),
   })
   .strict()
   .refine((o) => Object.keys(o).length > 0, { message: "At least one field is required" });
@@ -463,6 +486,7 @@ const studyWithMishkaStartSchema = z
     customPresetId: z.string().uuid().optional(),
     tags: z.array(z.string().max(80)).max(20).optional(),
     linkedTaskId: z.string().uuid().optional(),
+    studentSubjectId: z.string().uuid().optional(),
     clientAppVersion: z.string().max(40).optional(),
     platform: z.string().max(40).optional(),
   })
@@ -554,6 +578,28 @@ const studyCallBreakEndSchema = z
   })
   .strict();
 
+const communityDiscoveryFields = {
+  educationStatus: z.enum(["school", "university", "other"]).optional().nullable(),
+  schoolTrack: z.enum(["middle_school", "high_school"]).optional().nullable(),
+  schoolGrade: z.coerce.number().int().min(1).max(12).optional().nullable(),
+  universityYear: z.coerce.number().int().min(1).max(8).optional().nullable(),
+  subjectKeys: z.array(z.enum(COMMUNITY_SUBJECT_KEYS)).min(1).max(8).optional(),
+  purpose: z.enum(COMMUNITY_PURPOSE_KEYS).optional(),
+  locale: z.enum(["en", "ar"]).optional(),
+};
+
+function refineCategoryFields(d, ctx) {
+  const hasCategory = d.category != null && String(d.category).trim() !== "";
+  const hasNew = d.newCategoryTitle != null && String(d.newCategoryTitle).trim() !== "";
+  if (hasCategory && hasNew) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Provide category (existing title) or newCategoryTitle, not both",
+      path: ["category"],
+    });
+  }
+}
+
 const communityCreateSchema = z
   .object({
     name: z.string().min(1).max(200),
@@ -561,8 +607,12 @@ const communityCreateSchema = z
     imageUrl: z.string().max(500).optional().nullable(),
     visibility: z.enum(["public", "private"]),
     category: z.string().max(100).optional(),
+    newCategoryTitle: z.string().max(100).optional(),
+    ...communityDiscoveryFields,
   })
-  .strict();
+  .strict()
+  .superRefine(refineCategoryFields)
+  .superRefine(refineEducationFields);
 
 const communityJoinSchema = z
   .object({
@@ -595,12 +645,97 @@ const communityUpdateSchema = z
     description: z.string().max(8000).optional().nullable(),
     imageUrl: z.string().max(500).optional().nullable(),
     visibility: z.enum(["public", "private"]).optional(),
+    category: z.string().max(100).optional(),
+    newCategoryTitle: z.string().max(100).optional(),
+    ...communityDiscoveryFields,
   })
   .strict()
   .superRefine((d, ctx) => {
-    const keys = ["name", "description", "imageUrl", "visibility"].filter((k) => d[k] !== undefined);
+    const keys = [
+      "name",
+      "description",
+      "imageUrl",
+      "visibility",
+      "category",
+      "newCategoryTitle",
+      "educationStatus",
+      "schoolTrack",
+      "schoolGrade",
+      "universityYear",
+      "subjectKeys",
+      "purpose",
+      "locale",
+    ].filter((k) => d[k] !== undefined);
     if (keys.length === 0) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Provide at least one field", path: ["name"] });
+    }
+  })
+  .superRefine(refineCategoryFields)
+  .superRefine(refineEducationFields);
+
+const communityRecommendedQuerySchema = z
+  .object({
+    limit: z.coerce.number().int().min(1).max(50).optional(),
+    section: z.enum(["for_you", "popular", "new"]).optional(),
+    locale: z.enum(["en", "ar"]).optional(),
+  })
+  .strict();
+
+const communityDiscoverQuerySchema = z
+  .object({
+    subject: z.enum(COMMUNITY_SUBJECT_KEYS).optional(),
+    educationStatus: z.enum(["school", "university", "other"]).optional(),
+    schoolTrack: z.enum(["middle_school", "high_school"]).optional(),
+    schoolGrade: z.coerce.number().int().min(1).max(12).optional(),
+    universityYear: z.coerce.number().int().min(1).max(8).optional(),
+    purpose: z.enum(COMMUNITY_PURPOSE_KEYS).optional(),
+    localeFilter: z.enum(["en", "ar"]).optional(),
+    communityLocale: z.enum(["en", "ar"]).optional(),
+    q: z.string().max(200).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    offset: z.coerce.number().int().min(0).optional(),
+    locale: z.enum(["en", "ar"]).optional(),
+  })
+  .strict();
+
+const communityDiscoverCategoriesQuerySchema = z
+  .object({
+    locale: z.enum(["en", "ar"]).optional(),
+  })
+  .strict();
+
+const communityCategoryTitlesQuerySchema = z
+  .object({
+    q: z.string().max(100).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .strict();
+
+const communityInviteMemberSchema = z
+  .object({
+    email: z
+      .string()
+      .email()
+      .max(150)
+      .transform((s) => s.trim().toLowerCase())
+      .optional(),
+    username: z
+      .string()
+      .min(1)
+      .max(50)
+      .transform((s) => (s.trim().startsWith("@") ? s.trim().slice(1).trim() : s.trim()))
+      .optional(),
+  })
+  .strict()
+  .superRefine((d, ctx) => {
+    const hasEmail = Boolean(d.email);
+    const hasUser = Boolean(d.username);
+    if (hasEmail === hasUser) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Provide exactly one of email or username",
+        path: ["email"],
+      });
     }
   });
 
@@ -732,6 +867,104 @@ const quizSubmitSchema = z
   })
   .strict();
 
+const aiMaterialSourceTypeSchema = z.preprocess(
+  (v) => normalizeMaterialSourceType(v),
+  z.string().min(1).max(50)
+);
+
+const quizCreateSchema = z
+  .object({
+    title: z.string().min(1).max(150),
+    sourceType: aiMaterialSourceTypeSchema,
+    sourceReference: z.string().max(255).optional().nullable(),
+    chatSessionId: z.string().uuid().optional().nullable(),
+    totalQuestions: z.coerce.number().int().min(0).max(100).optional(),
+    savedAt: z.coerce.date().optional().nullable(),
+  })
+  .strict();
+
+const quizUpdateSchema = z
+  .object({
+    title: z.string().min(1).max(150).optional(),
+    sourceType: aiMaterialSourceTypeSchema.optional(),
+    sourceReference: z.string().max(255).optional().nullable(),
+    chatSessionId: z.string().uuid().optional().nullable(),
+    totalQuestions: z.coerce.number().int().min(0).max(100).optional(),
+    savedAt: z.coerce.date().optional().nullable(),
+  })
+  .strict()
+  .refine((d) => Object.keys(d).length > 0, { message: "Provide at least one field" });
+
+const quizQuestionCreateSchema = z
+  .object({
+    quizId: z.string().uuid(),
+    questionText: z.string().min(1).max(8000),
+    optionA: z.string().max(2000).optional(),
+    optionB: z.string().max(2000).optional(),
+    optionC: z.string().max(2000).optional(),
+    optionD: z.string().max(2000).optional(),
+    correctOption: z.enum(["A", "B", "C", "D", "a", "b", "c", "d"]).optional(),
+    options: z.array(z.string().max(2000)).min(2).max(4).optional(),
+    correctOptionIndex: z.coerce.number().int().min(0).max(3).optional(),
+    order: z.coerce.number().int().min(0).optional(),
+  })
+  .strict();
+
+const quizQuestionNestedCreateSchema = quizQuestionCreateSchema.omit({ quizId: true });
+const quizQuestionUpdateSchema = quizQuestionNestedCreateSchema;
+
+const flashcardSetCreateSchema = z
+  .object({
+    title: z.string().min(1).max(150),
+    sourceType: aiMaterialSourceTypeSchema,
+    sourceReference: z.string().max(255).optional().nullable(),
+    chatSessionId: z.string().uuid().optional().nullable(),
+  })
+  .strict();
+
+const flashcardCreateSchema = z
+  .object({
+    setId: z.string().uuid(),
+    question: z.string().min(1).max(8000),
+    answer: z.string().min(1).max(8000),
+  })
+  .strict();
+
+const summaryCreateSchema = z
+  .object({
+    summaryText: z.string().min(1).max(100000),
+    sourceType: aiMaterialSourceTypeSchema,
+    sourceReference: z.string().max(255).optional().nullable(),
+    chatSessionId: z.string().uuid().optional().nullable(),
+    savedAt: z.coerce.date().optional().nullable(),
+  })
+  .strict();
+
+const mindMapCreateSchema = z
+  .object({
+    title: z.string().min(1).max(500).optional(),
+    children: z.array(z.object({}).passthrough()).optional(),
+    content: z.union([z.object({}).passthrough(), z.string()]).optional(),
+    sourceType: aiMaterialSourceTypeSchema,
+    sourceReference: z.string().max(255).optional().nullable(),
+    chatSessionId: z.string().uuid().optional().nullable(),
+    savedAt: z.coerce.date().optional().nullable(),
+  })
+  .strict();
+
+const flashcardNestedCreateSchema = z
+  .object({
+    question: z.string().min(1).max(8000),
+    answer: z.string().min(1).max(8000),
+  })
+  .strict();
+
+const chatMessageUpdateSchema = z
+  .object({
+    messageContent: z.string().min(1).max(100000),
+  })
+  .strict();
+
 function emptyQueryToUndefined(val) {
   if (val === undefined || val === null || val === "") return undefined;
   return val;
@@ -852,6 +1085,10 @@ const userPreferenceReportEmailSchema = z
     reportEmailAutoEnabled: z.boolean().optional(),
     reportEmailFrequency: z.enum(["weekly", "monthly"]).nullable().optional(),
     reportEmailLocale: z.enum(["en", "ar"]).optional(),
+    reportEmailRecipient: z.preprocess(
+      (v) => (v === "" ? null : v),
+      z.union([z.string().email().max(200), z.null()]).optional()
+    ),
   })
   .strict()
   .superRefine((data, ctx) => {
@@ -878,9 +1115,21 @@ const yourReportExportSchema = z
     anchorDate: utcDateQuery,
     locale: z.enum(["en", "ar"]).optional().default("en"),
     delivery: z.enum(["email", "download", "both"]).optional().default("download"),
+    /** `account` = signup email; `custom` = requires `emailTo`. Omit to use emailTo, saved preference, then account. */
+    emailRecipient: z.enum(["account", "custom"]).optional(),
+    emailTo: z.string().email().max(200).optional(),
     timezone: z.string().max(64).optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.emailRecipient === "custom" && !data.emailTo) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "emailTo is required when emailRecipient is custom",
+        path: ["emailTo"],
+      });
+    }
+  });
 
 /** POST /study-with-mishka/reports/export — legacy simple PDF (pdfkit). */
 const studyReportExportSchema = z
@@ -975,6 +1224,11 @@ module.exports = {
   communityJoinSchema,
   communityLeaveSchema,
   communityUpdateSchema,
+  communityRecommendedQuerySchema,
+  communityDiscoverQuerySchema,
+  communityDiscoverCategoriesQuerySchema,
+  communityCategoryTitlesQuerySchema,
+  communityInviteMemberSchema,
   communityAddMemberSchema,
   communityMemberRoleSchema,
   materialShareBatchSchema,
@@ -989,7 +1243,20 @@ module.exports = {
   savedMindMapImportFromSharedSchema,
   communityChannelMessageCreateSchema,
   quizSubmitSchema,
+  quizCreateSchema,
+  quizUpdateSchema,
+  quizQuestionCreateSchema,
+  quizQuestionNestedCreateSchema,
+  quizQuestionUpdateSchema,
+  flashcardSetCreateSchema,
+  flashcardCreateSchema,
+  summaryCreateSchema,
+  mindMapCreateSchema,
+  flashcardNestedCreateSchema,
+  chatMessageUpdateSchema,
   studySessionPatchSchema,
+  studentSubjectCreateSchema,
+  studentSubjectUpdateSchema,
   studyWithMishkaStartSchema,
   studyWithMishkaAdvancePhaseSchema,
   studyWithMishkaEndSchema,
