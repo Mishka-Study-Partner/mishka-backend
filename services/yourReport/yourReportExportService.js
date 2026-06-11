@@ -116,7 +116,20 @@ async function runYourReportExportForUser(userId, opts) {
   const outPath = pdfPath(userId, reportId);
   ensureDir(path.dirname(outPath));
 
-  const pdfBuffer = await renderYourReportPdf(payload);
+  let pdfBuffer;
+  try {
+    pdfBuffer = await renderYourReportPdf(payload);
+  } catch (err) {
+    console.error("[yourReport.export] PDF render failed", err?.message || err);
+    throw new HttpError(
+      503,
+      "Could not generate report PDF on the server",
+      process.env.NODE_ENV === "development" || process.env.SHOW_ERROR_DETAILS === "true"
+        ? { developerMessage: err?.message, hint: "Install Chromium on deploy (see Dockerfile) or set PUPPETEER_EXECUTABLE_PATH" }
+        : undefined,
+      "REPORT_EXPORT_PDF_FAILED"
+    );
+  }
   fs.writeFileSync(outPath, pdfBuffer);
 
   writeMeta(userId, reportId, {
@@ -147,15 +160,27 @@ async function runYourReportExportForUser(userId, opts) {
       );
     }
     const filename = `mishka-report-${period}-${anchorDate}.pdf`;
-    await sendYourReportEmail({
-      to: recipientEmail,
-      subject,
-      periodLabel: payload.periodLabel,
-      downloadUrl: pdfUrl,
-      locale: payload.locale,
-      pdfPath: outPath,
-      filename,
-    });
+    try {
+      await sendYourReportEmail({
+        to: recipientEmail,
+        subject,
+        periodLabel: payload.periodLabel,
+        downloadUrl: pdfUrl,
+        locale: payload.locale,
+        pdfPath: outPath,
+        filename,
+      });
+    } catch (err) {
+      console.error("[yourReport.export] email failed", err?.message || err);
+      throw new HttpError(
+        502,
+        "Report PDF was created but email could not be sent",
+        process.env.NODE_ENV === "development" || process.env.SHOW_ERROR_DETAILS === "true"
+          ? { developerMessage: err?.message, recipient: recipientEmail }
+          : { recipient: recipientEmail },
+        "REPORT_EXPORT_EMAIL_FAILED"
+      );
+    }
     emailedTo = recipientEmail;
     emailSentAt = new Date().toISOString();
   }

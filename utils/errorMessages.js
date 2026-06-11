@@ -142,6 +142,14 @@ const ERROR_MESSAGES = {
     en: "No report data for this period",
     ar: "لا توجد بيانات تقرير لهذه الفترة",
   },
+  REPORT_EXPORT_PDF_FAILED: {
+    en: "Could not generate report PDF on the server",
+    ar: "تعذر إنشاء ملف PDF للتقرير على الخادم",
+  },
+  REPORT_EXPORT_EMAIL_FAILED: {
+    en: "Report PDF was created but email could not be sent",
+    ar: "تم إنشاء التقرير لكن تعذر إرسال البريد",
+  },
   USAGE_DAY_CAP_EXCEEDED: {
     en: "Daily usage reporting cap exceeded for this date",
     ar: "تم تجاوز الحد الأقصى لتسجيل وقت الاستخدام لهذا اليوم",

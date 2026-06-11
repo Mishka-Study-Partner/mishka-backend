@@ -2,19 +2,27 @@ FROM mirror.gcr.io/library/node:18-alpine
 
 WORKDIR /usr/src/app
 
-# 1. نسخ ملفات الـ package
-COPY package*.json ./
+# Chromium for Puppeteer PDF export (Your Report)
+RUN apk add --no-cache \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont \
+    font-noto \
+    font-noto-arabic
 
-# 2. نسخ مجلد الـ prisma أولاً لو موجود عشان الـ postinstall يشتغل صح
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
+    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
+COPY package*.json ./
 COPY prisma ./prisma/
 
-# 3. تخطي الـ scripts مؤقتاً أثناء الـ install عشان الـ build ميفصلش
 RUN npm install --production --ignore-scripts
 
-# 4. نسخ باقي الكود بالكامل
 COPY . .
 
-# 5. تشغيل الـ prisma generate يدوياً بعد ما الكود كله اتنسخ
 RUN npx prisma generate
 
 EXPOSE 3000

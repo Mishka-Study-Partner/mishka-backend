@@ -13,13 +13,22 @@ let browserPromise = null;
 
 async function getBrowser() {
   if (browserPromise) return browserPromise;
+  const fs = require("fs");
   const puppeteer = require("puppeteer");
-  const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH || undefined;
-  browserPromise = puppeteer.launch({
-    headless: true,
-    executablePath,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
-  });
+  const executablePath =
+    process.env.PUPPETEER_EXECUTABLE_PATH ||
+    (fs.existsSync("/usr/bin/chromium-browser") ? "/usr/bin/chromium-browser" : undefined) ||
+    (fs.existsSync("/usr/bin/chromium") ? "/usr/bin/chromium" : undefined);
+  browserPromise = puppeteer
+    .launch({
+      headless: true,
+      executablePath,
+      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+    })
+    .catch((err) => {
+      browserPromise = null;
+      throw err;
+    });
   return browserPromise;
 }
 
