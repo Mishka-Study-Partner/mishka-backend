@@ -1,4 +1,5 @@
 const { renderYourReportHtml } = require("./yourReportHtmlRenderer");
+const { resolveChromiumExecutablePath } = require("../../utils/chromiumPath");
 
 /** ISO A4 width — content is laid out to this width, then one tall page is emitted. */
 const PDF_WIDTH_MM = 210;
@@ -13,12 +14,9 @@ let browserPromise = null;
 
 async function getBrowser() {
   if (browserPromise) return browserPromise;
-  const fs = require("fs");
   const puppeteer = require("puppeteer");
-  const executablePath =
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    (fs.existsSync("/usr/bin/chromium-browser") ? "/usr/bin/chromium-browser" : undefined) ||
-    (fs.existsSync("/usr/bin/chromium") ? "/usr/bin/chromium" : undefined);
+  const executablePath = resolveChromiumExecutablePath();
+  console.log("[yourReport.pdf] using chromium:", executablePath);
   browserPromise = puppeteer
     .launch({
       headless: true,

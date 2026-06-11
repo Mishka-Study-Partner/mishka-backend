@@ -2,7 +2,7 @@ FROM mirror.gcr.io/library/node:18-alpine
 
 WORKDIR /usr/src/app
 
-# Chromium for Puppeteer PDF export (Your Report)
+# System Chromium (Alpine) + fonts for Your Report PDF
 RUN apk add --no-cache \
     chromium \
     nss \
@@ -11,7 +11,8 @@ RUN apk add --no-cache \
     ca-certificates \
     ttf-freefont \
     font-noto \
-    font-noto-arabic
+    font-noto-arabic \
+    && (test -x /usr/bin/chromium-browser || ln -sf /usr/bin/chromium /usr/bin/chromium-browser 2>/dev/null || true)
 
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
     PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
@@ -20,6 +21,9 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 RUN npm install --production --ignore-scripts
+
+# Fallback: Puppeteer-managed Chrome (if system path missing at runtime)
+RUN npx puppeteer browsers install chrome
 
 COPY . .
 
