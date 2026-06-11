@@ -138,6 +138,13 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Mishka backend listening on http://localhost:${PORT}`);
 
+  if (process.env.DISABLE_PDF_WARMUP !== "true") {
+    const { warmupYourReportPdfBrowser } = require("./services/yourReport/yourReportPdfRenderer");
+    warmupYourReportPdfBrowser().catch((err) => {
+      console.warn("[yourReport.pdf] warmup failed:", err?.message || err);
+    });
+  }
+
   if (process.env.ENABLE_IN_PROCESS_REPORT_CRON === "true") {
     try {
       const cron = require("node-cron");

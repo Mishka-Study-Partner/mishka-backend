@@ -12,16 +12,32 @@ function pxToMm(px) {
 
 let browserPromise = null;
 
+const CHROMIUM_ARGS = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-gpu",
+  "--no-first-run",
+  "--disable-extensions",
+  "--disable-background-networking",
+  "--disable-sync",
+];
+
 async function getBrowser() {
   if (browserPromise) return browserPromise;
   const puppeteer = require("puppeteer");
   const executablePath = resolveChromiumExecutablePath();
   console.log("[yourReport.pdf] using chromium:", executablePath);
+  const launchStarted = Date.now();
   browserPromise = puppeteer
     .launch({
       headless: true,
       executablePath,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
+      args: CHROMIUM_ARGS,
+    })
+    .then((browser) => {
+      console.log(`[yourReport.pdf] browser ready +${Date.now() - launchStarted}ms`);
+      return browser;
     })
     .catch((err) => {
       browserPromise = null;
@@ -30,17 +46,27 @@ async function getBrowser() {
   return browserPromise;
 }
 
+/** Pre-launch Chromium on server start so the first export is faster. */
+async function warmupYourReportPdfBrowser() {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  await page.setContent("<html><body>warmup</body></html>", { waitUntil: "load", timeout: 15000 });
+  await page.close();
+  console.log("[yourReport.pdf] warmup complete");
+}
+
 /**
  * @param {object} payload YourReportPayload
  * @returns {Promise<Buffer>}
  */
 async function renderYourReportPdf(payload) {
   const html = renderYourReportHtml(payload);
+  const renderStarted = Date.now();
   const browser = await getBrowser();
   const page = await browser.newPage();
   try {
     await page.setViewport({ width: PDF_WIDTH_PX, height: 2400, deviceScaleFactor: 1 });
-    await page.setContent(html, { waitUntil: "networkidle0", timeout: 60000 });
+    await page.setContent(html, { waitUntil: "load", timeout: 45000 });
     await page.evaluate(() => document.fonts.ready);
 
     const contentHeightPx = await page.evaluate(() => {
@@ -78,10 +104,11 @@ async function renderYourReportPdf(payload) {
       margin: { top: 0, right: 0, bottom: 0, left: 0 },
       displayHeaderFooter: false,
     });
+    console.log(`[yourReport.pdf] rendered +${Date.now() - renderStarted}ms`);
     return Buffer.from(pdf);
   } finally {
     await page.close();
   }
 }
 
-module.exports = { renderYourReportPdf, PDF_WIDTH_MM, PDF_WIDTH_PX };
+module.exports = { renderYourReportPdf, warmupYourReportPdfBrowser, PDF_WIDTH_MM, PDF_WIDTH_PX };

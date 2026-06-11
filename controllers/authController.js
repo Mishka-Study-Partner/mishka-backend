@@ -11,6 +11,7 @@ const {
   upsertOAuthUser,
 } = require("../services/oauthVerify");
 const { allocateUsername, ensureUsernameAssigned } = require("../utils/generateUsername");
+const { jwtSecret } = require("../utils/jwtSecret");
 const {
   EDUCATION_SELECT,
   touchesEducation,
@@ -30,7 +31,7 @@ function expiresInForRemember(rememberMe) {
 function issueToken(user, rememberMe) {
   const payload = { sub: user.id, email: user.email, role: user.role };
   const expiresIn = expiresInForRemember(Boolean(rememberMe));
-  const token = jwt.sign(payload, process.env.JWT_SECRET || "dev-secret-change-me", {
+  const token = jwt.sign(payload, jwtSecret(), {
     expiresIn,
   });
   return { token, expiresIn };

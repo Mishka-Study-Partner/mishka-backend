@@ -109,6 +109,16 @@ Authorization: Bearer <token>
 - Open or download via **`pdfUrl`** (token in URL works **without** Bearer).
 - PDF layout: **full width**, cream background, **single page** (height grows with content).
 
+**Client timeout:** PDF generation uses headless Chromium on the server. First export after deploy can take **30–90 seconds** (email adds a few more). Raise Dio **`receiveTimeout`** for this call only — e.g. **120 seconds** — and show a loading state. Default 30s will fail with `DioExceptionType.receiveTimeout` even when the server succeeds.
+
+```dart
+await dio.post(
+  ApiEndpoints.yourReportExport,
+  data: body,
+  options: Options(receiveTimeout: const Duration(seconds: 120)),
+);
+```
+
 **Download route:**
 
 ```http

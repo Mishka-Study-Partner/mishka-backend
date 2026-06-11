@@ -14,6 +14,7 @@ const {
   readMeta,
   ensureDir,
 } = require("../../utils/reportExportStorage");
+const { jwtSecret } = require("../../utils/jwtSecret");
 const { smtpConfigured, sendYourReportEmail } = require("../../utils/reportEmail");
 
 const DEFAULT_TTL_HOURS = 168;
@@ -33,18 +34,15 @@ function resolvePublicBaseUrl(req) {
 }
 
 function signDownloadToken(userId, reportId, expiresAt) {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("JWT_SECRET required for report export tokens");
   return jwt.sign(
     { sub: userId, exportId: reportId, purpose: "your_report_export" },
-    secret,
+    jwtSecret(),
     { expiresIn: Math.max(60, Math.floor((expiresAt.getTime() - Date.now()) / 1000)) }
   );
 }
 
 function verifyDownloadToken(token) {
-  const secret = process.env.JWT_SECRET;
-  const payload = jwt.verify(token, secret);
+  const payload = jwt.verify(token, jwtSecret());
   if (payload.purpose !== "your_report_export" || !payload.sub || !payload.exportId) {
     throw forbidden("Invalid export token", "FORBIDDEN");
   }
@@ -97,11 +95,16 @@ async function runYourReportExportForUser(userId, opts) {
     throw badRequest("delivery must be email, download, or both", undefined, "VALIDATION_ERROR");
   }
 
+  const startedAt = Date.now();
+  const logStep = (step) => console.log(`[yourReport.export] ${step} +${Date.now() - startedAt}ms`);
+
   const payload = await buildYourReportPayload(userId, {
     period,
     anchorDate,
     locale: locale === "ar" ? "ar" : "en",
   });
+
+  logStep("payload ready");
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -119,6 +122,7 @@ async function runYourReportExportForUser(userId, opts) {
   let pdfBuffer;
   try {
     pdfBuffer = await renderYourReportPdf(payload);
+    logStep("pdf rendered");
   } catch (err) {
     console.error("[yourReport.export] PDF render failed", err?.message || err);
     throw new HttpError(
@@ -183,7 +187,10 @@ async function runYourReportExportForUser(userId, opts) {
     }
     emailedTo = recipientEmail;
     emailSentAt = new Date().toISOString();
+    logStep("email sent");
   }
+
+  logStep("done");
 
   return {
     reportId,

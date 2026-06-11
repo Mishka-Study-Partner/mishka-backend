@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const PDFDocument = require("pdfkit");
 const prisma = require("../utils/prisma");
 const { badRequest, forbidden, notFound, HttpError } = require("../utils/httpError");
+const { jwtSecret } = require("../utils/jwtSecret");
 const { parseReportTopLevelMode } = require("../utils/studyReportMode");
 const {
   reportForDay,
@@ -200,18 +201,15 @@ function writePdf(filePath, bundle, user) {
 }
 
 function signDownloadToken(userId, exportId, expiresAt) {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error("JWT_SECRET required for report export tokens");
   return jwt.sign(
     { sub: userId, exportId, purpose: "report_export" },
-    secret,
+    jwtSecret(),
     { expiresIn: Math.max(60, Math.floor((expiresAt.getTime() - Date.now()) / 1000)) }
   );
 }
 
 function verifyDownloadToken(token) {
-  const secret = process.env.JWT_SECRET;
-  const payload = jwt.verify(token, secret);
+  const payload = jwt.verify(token, jwtSecret());
   if (payload.purpose !== "report_export" || !payload.sub || !payload.exportId) {
     throw forbidden("Invalid export token", "FORBIDDEN");
   }

@@ -304,6 +304,8 @@ Content-Type: application/json
 3. Show success: *“Report sent to {emailedTo}”* or open share sheet with downloaded PDF from `pdfUrl`.  
 4. Remove Syncfusion plain-text PDF builder for this screen.
 
+**Dio timeout:** Use `receiveTimeout: Duration(seconds: 120)` on this POST only. Server-side PDF + optional SMTP often exceeds the default 30s; a timeout on the client does not cancel server work — check email or retry after raising the limit.
+
 ---
 
 ## Automatic report email (settings toggle)
