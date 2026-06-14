@@ -298,6 +298,7 @@ module.exports = {
   getSummary,
   getHistory,
   utcTodayDate,
+  utcDateCompare,
   formatIsoDateUtc,
   mondayUtcOfWeekContaining,
   saturdayUtcOfWeekContaining,
