@@ -17,7 +17,7 @@ CREATE UNIQUE INDEX "badge_definitions_code_key" ON "badge_definitions"("code");
 
 CREATE TABLE "user_badge_events" (
     "badge_event_id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "user_id" UUID NOT NULL,
+    "user_id" TEXT NOT NULL,
     "badge_code" VARCHAR(64) NOT NULL,
     "source_type" VARCHAR(32) NOT NULL,
     "source_id" VARCHAR(128),
@@ -39,7 +39,7 @@ ALTER TABLE "user_badge_events" ADD CONSTRAINT "user_badge_events_user_id_fkey"
     FOREIGN KEY ("user_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 CREATE TABLE "user_chat_points" (
-    "user_id" UUID NOT NULL,
+    "user_id" TEXT NOT NULL,
     "total_points" INTEGER NOT NULL DEFAULT 0,
     "updated_at" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "user_chat_points_pkey" PRIMARY KEY ("user_id")
@@ -50,8 +50,8 @@ ALTER TABLE "user_chat_points" ADD CONSTRAINT "user_chat_points_user_id_fkey"
 
 CREATE TABLE "user_chat_point_events" (
     "chat_point_event_id" UUID NOT NULL DEFAULT gen_random_uuid(),
-    "user_id" UUID NOT NULL,
-    "message_id" UUID NOT NULL,
+    "user_id" TEXT NOT NULL,
+    "message_id" TEXT NOT NULL,
     "points" INTEGER NOT NULL DEFAULT 1,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "user_chat_point_events_pkey" PRIMARY KEY ("chat_point_event_id")
