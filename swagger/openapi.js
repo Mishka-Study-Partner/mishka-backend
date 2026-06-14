@@ -38,7 +38,12 @@ const tags = [
   {
     name: "Daily streaks",
     description:
-      "UTC calendar-day activity streak: counts when the user performs qualifying actions (or `POST /daily-streaks/ping`). Up to **2 freezes** protect a day without activity. Week view is Monday-based in UTC.",
+      "UTC calendar-day activity streak: counts when the user performs qualifying actions (or `POST /daily-streaks/ping`). Up to **2 freezes** protect a day without activity. Week view defaults to **Saturday–Friday** (UTC); `weekStart` may be Saturday or Monday.",
+  },
+  {
+    name: "Gamification",
+    description:
+      "Weekly hub dashboard, badge collect (quiz / flashcards / summary / mind map), monthly section drill-downs, auto weekly badges for tasks (30/week), study (21 hr), and community (action score). AI badge counts are **weekly** on hub and **monthly** on AI monthly screen.",
   },
   {
     name: "Usage tracking",

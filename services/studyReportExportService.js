@@ -25,7 +25,7 @@ const {
   readMeta,
   ensureDir,
 } = require("../utils/reportExportStorage");
-const { smtpConfigured, sendReportExportEmail } = require("../utils/reportEmail");
+const { emailConfigured, sendReportExportEmail } = require("../utils/reportEmail");
 
 const DEFAULT_TTL_HOURS = 168;
 
@@ -247,10 +247,10 @@ async function createExport(req) {
 
   let emailedTo = null;
   if (body.delivery === "email") {
-    if (!smtpConfigured()) {
+    if (!emailConfigured()) {
       throw new HttpError(
         503,
-        "Email delivery is not configured (set SMTP_HOST and SMTP_FROM)",
+        "Email delivery is not configured (set RESEND_API_KEY or SMTP_HOST and SMTP_FROM)",
         undefined,
         "REPORT_EXPORT_EMAIL_NOT_CONFIGURED"
       );

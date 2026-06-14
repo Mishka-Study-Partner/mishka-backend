@@ -3,6 +3,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const { createCrudHandlers } = require("../utils/prismaCrud");
 const { assertOwnedOrAdmin, ownedWhere } = require("../utils/authz");
 const { recordDailyStreakActivity } = require("../services/dailyStreakService");
+const { onUserChatMessageCreated } = require("../services/gamification/gamificationChatHook");
 const { badRequest } = require("../utils/httpError");
 
 const crud = createCrudHandlers("chatSession", {
@@ -106,8 +107,12 @@ exports.createMessage = asyncHandler(async (req, res) => {
     data: {
       ...req.body,
       sessionId: req.params.id,
+      senderType: "user",
     },
   });
   void recordDailyStreakActivity(session.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
+  void onUserChatMessageCreated(session.userId, row).catch((err) =>
+    console.error("[gamification.chatPoints]", err?.message || err)
+  );
   res.apiCreated(row, "CREATED");
 });

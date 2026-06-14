@@ -101,6 +101,7 @@ app.use("/user-streaks", require("./routes/userStreaks"));
 app.use("/ai-tools", require("./routes/aiTools"));
 app.use("/study-with-mishka", require("./routes/studyWithMishka"));
 app.use("/student-subjects", require("./routes/studentSubjects"));
+app.use("/gamification", require("./routes/gamification"));
 app.use("/reports", require("./routes/reports"));
 app.use("/communities", require("./routes/communities"));
 app.use("/user-communities", require("./routes/userCommunities"));

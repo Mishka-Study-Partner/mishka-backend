@@ -111,12 +111,15 @@ Authorization: Bearer <token>
 
 **Client timeout:** PDF generation uses headless Chromium on the server. First export after deploy can take **30–90 seconds** (email adds a few more). Raise Dio **`receiveTimeout`** for this call only — e.g. **120 seconds** — and show a loading state. Default 30s will fail with `DioExceptionType.receiveTimeout` even when the server succeeds.
 
+**Email on Railway:** Gmail SMTP (`smtp.gmail.com`) often **connection timeouts** on Railway. Prefer **Resend** (`RESEND_API_KEY` + `RESEND_FROM` on the server). If `delivery: both` and email fails, response still includes **`pdfUrl`** with `emailFailed: true`.
+
 ```dart
 await dio.post(
   ApiEndpoints.yourReportExport,
   data: body,
   options: Options(receiveTimeout: const Duration(seconds: 120)),
 );
+// if data['emailFailed'] == true → show pdfUrl download, warn email did not send
 ```
 
 **Download route:**

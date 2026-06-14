@@ -3,6 +3,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const { notFound, badRequest } = require("../utils/httpError");
 const { assertOwnedOrAdmin, isAdmin } = require("../utils/authz");
 const { recordDailyStreakActivity } = require("../services/dailyStreakService");
+const { onUserChatMessageCreated } = require("../services/gamification/gamificationChatHook");
 
 async function loadMessageWithSession(id) {
   return prisma.chatMessage.findUnique({
@@ -38,8 +39,13 @@ exports.create = asyncHandler(async (req, res) => {
     data: {
       ...req.body,
       sessionId,
+      senderType: "user",
     },
   });
+  void recordDailyStreakActivity(session.userId).catch((err) => console.error("[dailyStreak]", err?.message || err));
+  void onUserChatMessageCreated(session.userId, row).catch((err) =>
+    console.error("[gamification.chatPoints]", err?.message || err)
+  );
   res.apiCreated(row, "CREATED");
 });
 

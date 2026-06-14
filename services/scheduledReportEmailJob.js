@@ -2,7 +2,7 @@ const prisma = require("../utils/prisma");
 const { formatIsoDateUtc } = require("./dailyStreakService");
 const { utcWeekRangeContaining } = require("./studyPeriodReportService");
 const { runYourReportExportForUser } = require("./yourReport/yourReportExportService");
-const { smtpConfigured } = require("../utils/reportEmail");
+const { emailConfigured } = require("../utils/reportEmail");
 
 /**
  * Previous ISO week (Mon–Sun) ending before the current week.
@@ -59,7 +59,7 @@ async function runScheduledReportEmails(opts = {}) {
     };
   }
 
-  if (!smtpConfigured()) {
+  if (!emailConfigured()) {
     return { skipped: true, reason: "SMTP not configured", sent: 0, failed: 0 };
   }
 

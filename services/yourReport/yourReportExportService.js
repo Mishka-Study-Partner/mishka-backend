@@ -15,7 +15,7 @@ const {
   ensureDir,
 } = require("../../utils/reportExportStorage");
 const { jwtSecret } = require("../../utils/jwtSecret");
-const { smtpConfigured, sendYourReportEmail } = require("../../utils/reportEmail");
+const { emailConfigured, sendYourReportEmail } = require("../../utils/reportEmail");
 
 const DEFAULT_TTL_HOURS = 168;
 
@@ -155,10 +155,10 @@ async function runYourReportExportForUser(userId, opts) {
   let emailSentAt = null;
 
   if (delivery === "email" || delivery === "both") {
-    if (!smtpConfigured()) {
+    if (!emailConfigured()) {
       throw new HttpError(
         503,
-        "Email delivery is not configured (set SMTP_HOST and SMTP_FROM)",
+        "Email delivery is not configured (set RESEND_API_KEY or SMTP_HOST + SMTP_FROM)",
         undefined,
         "REPORT_EXPORT_EMAIL_NOT_CONFIGURED"
       );
@@ -176,6 +176,19 @@ async function runYourReportExportForUser(userId, opts) {
       });
     } catch (err) {
       console.error("[yourReport.export] email failed", err?.message || err);
+      if (delivery === "both") {
+        logStep("email failed (pdf still available)");
+        return {
+          reportId,
+          periodLabel: payload.periodLabel,
+          pdfUrl,
+          expiresAt: expiresAt.toISOString(),
+          emailedTo: null,
+          emailSentAt: null,
+          emailFailed: true,
+          delivery,
+        };
+      }
       throw new HttpError(
         502,
         "Report PDF was created but email could not be sent",

@@ -50,6 +50,14 @@ function mondayUtcOfWeekContaining(anchor) {
   return addUtcDays(d, delta);
 }
 
+/** Saturday (UTC) start of gamification / home streak week (Sat–Fri). */
+function saturdayUtcOfWeekContaining(anchor) {
+  const d = utcDateFromParts(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate());
+  const dow = d.getUTCDay();
+  const delta = dow === 6 ? 0 : -(dow + 1);
+  return addUtcDays(d, delta);
+}
+
 /**
  * Count consecutive UTC calendar days ending at `end`, walking backward,
  * where each day is `completed` or `frozen`. Stops at first gap or `missed`.
@@ -194,15 +202,15 @@ function streakDayView(d, today, row) {
 
 /**
  * @param {string} userId
- * @param {string} [weekStartIso] Monday YYYY-MM-DD (UTC); defaults to current week
+ * @param {string} [weekStartIso] Saturday or Monday YYYY-MM-DD (UTC); defaults to current Sat–Fri week
  */
 async function getSummary(userId, weekStartIso) {
   const today = utcTodayDate();
-  let weekStart = weekStartIso ? parseIsoDateUtc(weekStartIso) : mondayUtcOfWeekContaining(today);
+  let weekStart = weekStartIso ? parseIsoDateUtc(weekStartIso) : saturdayUtcOfWeekContaining(today);
   if (!weekStart) throw badRequest("weekStart must be YYYY-MM-DD", undefined, "VALIDATION_ERROR");
   const dow = weekStart.getUTCDay();
-  if (dow !== 1) {
-    throw badRequest("weekStart must be a Monday (UTC)", undefined, "VALIDATION_ERROR");
+  if (dow !== 1 && dow !== 6) {
+    throw badRequest("weekStart must be a Saturday or Monday (UTC)", undefined, "VALIDATION_ERROR");
   }
 
   const weekEnd = addUtcDays(weekStart, 6);
@@ -292,6 +300,7 @@ module.exports = {
   utcTodayDate,
   formatIsoDateUtc,
   mondayUtcOfWeekContaining,
+  saturdayUtcOfWeekContaining,
   parseIsoDateUtc,
   addUtcDays,
 };

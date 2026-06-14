@@ -168,6 +168,9 @@ model User {
   savedCommunities         UserSavedCommunity[]
   /// Community groups (channels) this user created (metadata for "created by").
   communityChannelsCreated CommunityChannel[] @relation("CommunityChannelCreatedBy")
+  badgeEvents              UserBadgeEvent[]
+  chatPoints               UserChatPoints?
+  chatPointEvents          UserChatPointEvent[]
 
   @@map("users")
 }
@@ -969,4 +972,71 @@ model Task {
   @@index([userId])
   @@index([listId])
   @@map("tasks")
+}
+
+model BadgeDefinition {
+  id        String   @id @default(uuid()) @map("badge_definition_id")
+  code      String   @unique @db.VarChar(64)
+  category  String   @db.VarChar(32)
+  titleEn   String   @map("title_en") @db.VarChar(255)
+  titleAr   String?  @map("title_ar") @db.VarChar(255)
+  assetKey  String?  @map("asset_key") @db.VarChar(64)
+  sortOrder Int      @default(0) @map("sort_order")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("badge_definitions")
+}
+
+model UserBadgeEvent {
+  id             String    @id @default(uuid()) @map("badge_event_id")
+  userId         String    @map("user_id")
+  badgeCode      String    @map("badge_code") @db.VarChar(64)
+  sourceType     String    @map("source_type") @db.VarChar(32)
+  sourceId       String?   @map("source_id") @db.VarChar(128)
+  metadata       Json?
+  periodWeek     DateTime? @map("period_week") @db.Date
+  periodMonth    DateTime? @map("period_month") @db.Date
+  idempotencyKey String    @unique @map("idempotency_key") @db.VarChar(128)
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, badgeCode])
+  @@index([userId, periodWeek])
+  @@index([userId, periodMonth])
+  @@index([userId, badgeCode, periodWeek])
+  @@map("user_badge_events")
+}
+
+model UserChatPoints {
+  userId      String   @id @map("user_id")
+  totalPoints Int      @default(0) @map("total_points")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_chat_points")
+}
+
+model UserChatPointEvent {
+  id        String   @id @default(uuid()) @map("chat_point_event_id")
+  userId    String   @map("user_id")
+  messageId String   @unique @map("message_id")
+  points    Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("user_chat_point_events")
+}
+
+model GamificationGoal {
+  code          String  @id @db.VarChar(64)
+  valueNumeric  Int     @map("value_numeric")
+  unit          String? @db.VarChar(32)
+  descriptionEn String? @map("description_en")
+
+  @@map("gamification_goals")
 }

@@ -3408,6 +3408,67 @@ const paths = {
     },
   },
 
+  "/gamification/dashboard": {
+    get: {
+      tags: ["Gamification"],
+      summary: "Weekly gamification hub dashboard",
+      description:
+        "Sat–Fri week (UTC). Returns streak, tasks (goal 30/week), study minutes, community action score, and **7** AI badge **weekly** counts. Auto-awards weekly tasks/study/community badges when thresholds met.",
+      parameters: [
+        ...lang,
+        { name: "period", in: "query", schema: { type: "string", enum: ["weekly"] } },
+        {
+          name: "weekStart",
+          in: "query",
+          schema: { type: "string", format: "date" },
+          description: "Saturday YYYY-MM-DD (UTC). Defaults to current Sat–Fri week.",
+        },
+      ],
+      security: bearer,
+      responses: std(),
+    },
+  },
+  "/gamification/badges/collect": {
+    post: {
+      tags: ["Gamification"],
+      summary: "Collect badge after quiz / flashcards / summary / mind map",
+      description:
+        "Idempotent via `idempotencyKey`. Quiz tier validated server-side. Returns `timesEarnedThisWeek` and `timesEarnedThisMonth`.",
+      parameters: lang,
+      security: bearer,
+      requestBody: jsonBody("#/components/schemas/GamificationCollectBody", ""),
+      responses: std(),
+    },
+  },
+  "/gamification/sections/{section}/monthly": {
+    get: {
+      tags: ["Gamification"],
+      summary: "Monthly drill-down for a gamification section",
+      description:
+        "`section`: `streak` | `tasks` | `study` | `community` | `ai-tools`. Query `month=YYYY-MM`. AI tools returns 7 groups with weekly + month totals.",
+      parameters: [
+        ...lang,
+        {
+          name: "section",
+          in: "path",
+          required: true,
+          schema: {
+            type: "string",
+            enum: ["streak", "tasks", "study", "community", "ai-tools"],
+          },
+        },
+        {
+          name: "month",
+          in: "query",
+          required: true,
+          schema: { type: "string", pattern: "^\\d{4}-\\d{2}$" },
+        },
+      ],
+      security: bearer,
+      responses: std(),
+    },
+  },
+
   "/material-shares": {
     get: {
       tags: ["Communities"],

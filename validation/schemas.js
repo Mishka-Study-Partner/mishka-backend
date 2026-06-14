@@ -1197,6 +1197,32 @@ const todoListQuerySchema = z
   })
   .strict();
 
+/** GET /gamification/dashboard */
+const gamificationDashboardQuerySchema = z
+  .object({
+    period: z.literal("weekly").optional(),
+    weekStart: utcDateQuery.optional(),
+  })
+  .strict();
+
+/** POST /gamification/badges/collect */
+const gamificationCollectSchema = z
+  .object({
+    badgeCode: z.string().trim().min(1).max(64),
+    sourceType: z.enum(["quiz", "flashcards", "summary", "mindmap"]),
+    sourceId: z.string().trim().min(1).max(128),
+    idempotencyKey: z.string().trim().min(1).max(128),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+  })
+  .strict();
+
+/** GET /gamification/sections/{section}/monthly */
+const gamificationMonthlyQuerySchema = z
+  .object({
+    month: z.string().regex(/^\d{4}-\d{2}$/, "month must be YYYY-MM"),
+  })
+  .strict();
+
 module.exports = {
   passwordPolicy,
   registerSchema,
@@ -1277,4 +1303,7 @@ module.exports = {
   studyReportExportSchema,
   aiUsageReportQuerySchema,
   todoListQuerySchema,
+  gamificationDashboardQuerySchema,
+  gamificationCollectSchema,
+  gamificationMonthlyQuerySchema,
 };

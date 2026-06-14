@@ -633,6 +633,18 @@ module.exports = {
         emailTo: "norhan.moh@gmail.com",
       },
     },
+    GamificationCollectBody: {
+      type: "object",
+      additionalProperties: false,
+      required: ["badgeCode", "sourceType", "sourceId", "idempotencyKey"],
+      properties: {
+        badgeCode: { type: "string", example: "quiz_perfect" },
+        sourceType: { type: "string", enum: ["quiz", "flashcards", "summary", "mindmap"] },
+        sourceId: { type: "string", format: "uuid" },
+        idempotencyKey: { type: "string", example: "quiz:attempt-uuid:quiz_perfect" },
+        metadata: { type: "object", additionalProperties: true },
+      },
+    },
     YourReportExportResult: {
       type: "object",
       additionalProperties: false,
