@@ -71,6 +71,7 @@ enum EducationStatus {
 }
 
 enum SchoolTrack {
+  primary_school
   middle_school
   high_school
 }

@@ -937,7 +937,7 @@ const paths = {
         ...lang,
         { name: "subject", in: "query", schema: { type: "string" } },
         { name: "educationStatus", in: "query", schema: { type: "string", enum: ["school", "university", "other"] } },
-        { name: "schoolTrack", in: "query", schema: { type: "string", enum: ["middle_school", "high_school"] } },
+        { name: "schoolTrack", in: "query", schema: { type: "string", enum: ["primary_school", "middle_school", "high_school"] } },
         { name: "schoolGrade", in: "query", schema: { type: "integer" } },
         { name: "universityYear", in: "query", schema: { type: "integer" } },
         { name: "purpose", in: "query", schema: { type: "string" } },

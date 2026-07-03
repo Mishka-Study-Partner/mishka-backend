@@ -27,8 +27,8 @@ const registerSchema = z
     signupOtp: z.string().min(4).max(10).optional(),
     educationStatus: z.enum(["school", "university", "other"]).optional(),
     educationOtherDetail: z.string().max(500).optional(),
-    schoolTrack: z.enum(["middle_school", "high_school"]).optional(),
-    schoolGrade: z.coerce.number().int().min(1).max(3).optional(),
+    schoolTrack: z.enum(["primary_school", "middle_school", "high_school"]).optional(),
+    schoolGrade: z.coerce.number().int().min(1).max(6).optional(),
     universityYear: z.coerce.number().int().min(1).max(5).optional(),
     gender: z.enum(["male", "female", "prefer_not_to_say"]).optional(),
   })
@@ -55,56 +55,21 @@ const registerSchema = z
       }
     }
 
-    if (data.educationStatus === "other") {
-      const t = (data.educationOtherDetail || "").trim();
-      if (!t) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "educationOtherDetail is required when educationStatus is other",
-          path: ["educationOtherDetail"],
-        });
-      }
-    }
-    if (data.educationStatus === "school") {
-      if (!data.schoolTrack) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "schoolTrack is required when educationStatus is school",
-          path: ["schoolTrack"],
-        });
-      }
-      if (data.schoolGrade == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "schoolGrade (1–3) is required when educationStatus is school",
-          path: ["schoolGrade"],
-        });
-      }
-    }
-    if (data.educationStatus === "university") {
-      if (data.universityYear == null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "universityYear (1–5) is required when educationStatus is university",
-          path: ["universityYear"],
-        });
-      }
-    }
-    if (data.educationStatus !== "school" && (data.schoolTrack != null || data.schoolGrade != null)) {
+    if (data.educationStatus) {
+      refineEducationFields(data, ctx, { profileGradeLimits: true });
+    } else if (data.schoolTrack != null || data.schoolGrade != null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "schoolTrack and schoolGrade are only allowed when educationStatus is school",
         path: ["schoolTrack"],
       });
-    }
-    if (data.educationStatus !== "university" && data.universityYear != null) {
+    } else if (data.universityYear != null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "universityYear is only allowed when educationStatus is university",
         path: ["universityYear"],
       });
-    }
-    if (data.educationStatus !== "other" && data.educationOtherDetail != null && data.educationOtherDetail.trim() !== "") {
+    } else if (data.educationOtherDetail != null && data.educationOtherDetail.trim() !== "") {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "educationOtherDetail is only used when educationStatus is other",
@@ -254,8 +219,8 @@ const updateMeSchema = z
     rememberMe: z.boolean().optional(),
     educationStatus: z.enum(["school", "university", "other"]).optional(),
     educationOtherDetail: z.string().max(500).optional().nullable(),
-    schoolTrack: z.enum(["middle_school", "high_school"]).optional().nullable(),
-    schoolGrade: z.coerce.number().int().min(1).max(3).optional().nullable(),
+    schoolTrack: z.enum(["primary_school", "middle_school", "high_school"]).optional().nullable(),
+    schoolGrade: z.coerce.number().int().min(1).max(6).optional().nullable(),
     universityYear: z.coerce.number().int().min(1).max(5).optional().nullable(),
   })
   .strict()
@@ -282,13 +247,13 @@ const updateMeSchema = z
       data.schoolGrade !== undefined ||
       data.universityYear !== undefined;
     if (touchesEdu && data.educationStatus) {
-      refineEducationFields(data, ctx);
+      refineEducationFields(data, ctx, { profileGradeLimits: true });
     }
   });
 
 /** @param {Record<string, unknown>} data @param {import("zod").RefinementCtx} ctx */
 function refineOAuthEducation(data, ctx) {
-  refineEducationFields(data, ctx);
+  refineEducationFields(data, ctx, { profileGradeLimits: true });
 }
 
 const oauthCommonShape = {
@@ -300,8 +265,8 @@ const oauthCommonShape = {
   countryCode: z.string().max(5).optional(),
   educationStatus: z.enum(["school", "university", "other"]).optional(),
   educationOtherDetail: z.string().max(500).optional(),
-  schoolTrack: z.enum(["middle_school", "high_school"]).optional(),
-  schoolGrade: z.coerce.number().int().min(1).max(3).optional(),
+  schoolTrack: z.enum(["primary_school", "middle_school", "high_school"]).optional(),
+  schoolGrade: z.coerce.number().int().min(1).max(6).optional(),
   universityYear: z.coerce.number().int().min(1).max(5).optional(),
 };
 
@@ -580,7 +545,7 @@ const studyCallBreakEndSchema = z
 
 const communityDiscoveryFields = {
   educationStatus: z.enum(["school", "university", "other"]).optional().nullable(),
-  schoolTrack: z.enum(["middle_school", "high_school"]).optional().nullable(),
+  schoolTrack: z.enum(["primary_school", "middle_school", "high_school"]).optional().nullable(),
   schoolGrade: z.coerce.number().int().min(1).max(12).optional().nullable(),
   universityYear: z.coerce.number().int().min(1).max(8).optional().nullable(),
   subjectKeys: z.array(z.enum(COMMUNITY_SUBJECT_KEYS)).min(1).max(8).optional(),
@@ -685,7 +650,7 @@ const communityDiscoverQuerySchema = z
   .object({
     subject: z.enum(COMMUNITY_SUBJECT_KEYS).optional(),
     educationStatus: z.enum(["school", "university", "other"]).optional(),
-    schoolTrack: z.enum(["middle_school", "high_school"]).optional(),
+    schoolTrack: z.enum(["primary_school", "middle_school", "high_school"]).optional(),
     schoolGrade: z.coerce.number().int().min(1).max(12).optional(),
     universityYear: z.coerce.number().int().min(1).max(8).optional(),
     purpose: z.enum(COMMUNITY_PURPOSE_KEYS).optional(),

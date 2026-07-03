@@ -1,5 +1,7 @@
 const { z } = require("zod");
 
+const SCHOOL_TRACK_VALUES = ["primary_school", "middle_school", "high_school"];
+
 const EDUCATION_SELECT = {
   educationStatus: true,
   educationOtherDetail: true,
@@ -18,8 +20,22 @@ function touchesEducation(body) {
   );
 }
 
-/** @param {import("zod").RefinementCtx} ctx */
-function refineEducationFields(data, ctx) {
+/** @param {string | null | undefined} track */
+function schoolGradeRangeForTrack(track) {
+  if (track === "primary_school") return { min: 1, max: 6 };
+  if (track === "middle_school" || track === "high_school") return { min: 1, max: 3 };
+  return null;
+}
+
+/**
+ * @param {Record<string, unknown>} data
+ * @param {import("zod").RefinementCtx} ctx
+ * @param {{ profileGradeLimits?: boolean }} [options]
+ *   When `profileGradeLimits` is true (user education profile), enforce
+ *   primary_school → 1–6 and middle/high → 1–3. Communities keep broader grades.
+ */
+function refineEducationFields(data, ctx, options = {}) {
+  const { profileGradeLimits = false } = options;
   if (!data.educationStatus) return;
   if (data.educationStatus === "other") {
     const t = String(data.educationOtherDetail || "").trim();
@@ -42,9 +58,21 @@ function refineEducationFields(data, ctx) {
     if (data.schoolGrade == null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "schoolGrade (1–3) is required when educationStatus is school",
+        message: "schoolGrade is required when educationStatus is school",
         path: ["schoolGrade"],
       });
+    } else if (profileGradeLimits && data.schoolTrack) {
+      const range = schoolGradeRangeForTrack(data.schoolTrack);
+      if (range && (data.schoolGrade < range.min || data.schoolGrade > range.max)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            data.schoolTrack === "primary_school"
+              ? "schoolGrade must be an integer 1–6 when schoolTrack is primary_school"
+              : "schoolGrade must be an integer 1–3 when schoolTrack is middle_school or high_school",
+          path: ["schoolGrade"],
+        });
+      }
     }
   }
   if (data.educationStatus === "university") {
@@ -87,11 +115,11 @@ const educationProfileSchema = z
   .object({
     educationStatus: z.enum(["school", "university", "other"]),
     educationOtherDetail: z.string().max(500).optional().nullable(),
-    schoolTrack: z.enum(["middle_school", "high_school"]).optional().nullable(),
-    schoolGrade: z.coerce.number().int().min(1).max(3).optional().nullable(),
+    schoolTrack: z.enum(["primary_school", "middle_school", "high_school"]).optional().nullable(),
+    schoolGrade: z.coerce.number().int().min(1).max(6).optional().nullable(),
     universityYear: z.coerce.number().int().min(1).max(5).optional().nullable(),
   })
-  .superRefine(refineEducationFields);
+  .superRefine((data, ctx) => refineEducationFields(data, ctx, { profileGradeLimits: true }));
 
 /**
  * Merge PATCH body with stored user row for validation.
@@ -122,8 +150,10 @@ function educationToPrismaData(merged) {
 }
 
 module.exports = {
+  SCHOOL_TRACK_VALUES,
   EDUCATION_SELECT,
   touchesEducation,
+  schoolGradeRangeForTrack,
   refineEducationFields,
   educationProfileSchema,
   mergeEducationState,
